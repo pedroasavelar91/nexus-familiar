@@ -33,15 +33,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-interface Task {
-  id: string;
-  title: string;
-  assignee: string;
-  priority: "high" | "medium" | "low";
-  completed: boolean;
-  dueDate: string;
-  recurring?: boolean;
-}
+import { useTasks, Task } from "@/hooks/useTasks";
 
 const priorityConfig = {
   high: { label: "Alta", color: "text-rose-600", bg: "bg-rose-100 dark:bg-rose-900/30", dot: "bg-rose-500" },
@@ -61,30 +53,13 @@ const ITEMS_PER_PAGE = 10;
 
 const Tarefas = () => {
   const { toast } = useToast();
+  const { tasks, loading, addTask, toggleTask, deleteTask } = useTasks();
+
   const [activeTab, setActiveTab] = useState<"today" | "all">("today");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: "1", title: "Levar cachorro no veterinário", assignee: "Maria", priority: "high", completed: false, dueDate: "2024-01-06" },
-    { id: "2", title: "Pagar conta de luz", assignee: "João", priority: "high", completed: false, dueDate: "2024-01-06" },
-    { id: "3", title: "Limpar filtro do ar-condicionado", assignee: "Lucas", priority: "medium", completed: true, dueDate: "2024-01-05", recurring: true },
-    { id: "4", title: "Comprar ração do Rex", assignee: "Maria", priority: "medium", completed: false, dueDate: "2024-01-06" },
-    { id: "5", title: "Organizar armário do quarto", assignee: "Ana", priority: "low", completed: false, dueDate: "2024-01-08" },
-    { id: "6", title: "Regar as plantas", assignee: "João", priority: "low", completed: true, dueDate: "2024-01-06", recurring: true },
-    // Extra mock data for pagination
-    { id: "7", title: "Lavar o carro", assignee: "Lucas", priority: "medium", completed: false, dueDate: "2024-01-09" },
-    { id: "8", title: "Estudar para prova", assignee: "Ana", priority: "high", completed: false, dueDate: "2024-01-10" },
-    { id: "9", title: "Fazer compras da semana", assignee: "Maria", priority: "high", completed: true, dueDate: "2024-01-04" },
-    { id: "10", title: "Consertar a torneira", assignee: "João", priority: "low", completed: false, dueDate: "2024-01-11" },
-    { id: "11", title: "Limpar a piscina", assignee: "Lucas", priority: "medium", completed: false, dueDate: "2024-01-12" },
-    { id: "12", title: "Levar lixo para fora", assignee: "Ana", priority: "low", completed: true, dueDate: "2024-01-06", recurring: true },
-    { id: "13", title: "Pagar internet", assignee: "Maria", priority: "high", completed: false, dueDate: "2024-01-15" },
-    { id: "14", title: "Marcar dentista", assignee: "João", priority: "medium", completed: false, dueDate: "2024-01-16" },
-    { id: "15", title: "Trocar lâmpada da sala", assignee: "Lucas", priority: "low", completed: true, dueDate: "2024-01-02" },
-  ]);
 
   const [newTask, setNewTask] = useState({
     title: "",
@@ -97,7 +72,9 @@ const Tarefas = () => {
   // Calculate filtered tasks based on Tab + Status Filter
   const filteredTasks = tasks.filter((t) => {
     // 1. Filter by Tab (Today vs All)
-    const matchesTab = activeTab === "all" || t.dueDate === "2024-01-06"; // Mocking "today" date logic
+    // Note: Comparing YYYY-MM-DD
+    const today = new Date().toISOString().split("T")[0];
+    const matchesTab = activeTab === "all" || t.dueDate === today;
 
     // 2. Filter by Status
     const matchesStatus =
@@ -115,7 +92,8 @@ const Tarefas = () => {
     currentPage * ITEMS_PER_PAGE
   );
 
-  const todayTasks = tasks.filter((t) => t.dueDate === "2024-01-06");
+  const today = new Date().toISOString().split("T")[0];
+  const todayTasks = tasks.filter((t) => t.dueDate === today);
   const completedCount = todayTasks.filter((t) => t.completed).length;
   const progressPercent = todayTasks.length > 0 ? (completedCount / todayTasks.length) * 100 : 0;
 
@@ -124,56 +102,17 @@ const Tarefas = () => {
     if (!newTask.title) return;
 
     setSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const task: Task = {
-      id: crypto.randomUUID(),
+    await addTask({
       title: newTask.title,
       assignee: newTask.assignee,
       priority: newTask.priority,
-      completed: false,
       dueDate: newTask.dueDate,
-      recurring: newTask.recurring,
-    };
+      recurring: newTask.recurring
+    });
 
-    setTasks(prev => [task, ...prev]);
     setNewTask({ title: "", assignee: "Maria", priority: "medium", dueDate: new Date().toISOString().split("T")[0], recurring: false });
     setDialogOpen(false);
     setSubmitting(false);
-
-    toast({
-      title: "✓ Tarefa criada!",
-      description: `${task.title} atribuída a ${task.assignee}`,
-    });
-  };
-
-  const toggleTask = (taskId: string) => {
-    setTasks(prev => prev.map(task => {
-      if (task.id === taskId) {
-        const newCompleted = !task.completed;
-        toast({
-          title: newCompleted ? "✓ Concluída!" : "Reaberta",
-          description: task.title,
-        });
-        return { ...task, completed: newCompleted };
-      }
-      return task;
-    }));
-  };
-
-  const deleteTask = (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-
-    // Adjust page if current page becomes empty
-    if (paginatedTasks.length === 1 && currentPage > 1) {
-      setCurrentPage(p => p - 1);
-    }
-
-    toast({
-      title: "Tarefa removida",
-      description: task?.title,
-    });
   };
 
   return (

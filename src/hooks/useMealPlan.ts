@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useFamily } from "./useFamily";
 import { useToast } from "./use-toast";
 import { Recipe, Ingredient } from "./useRecipes";
 
@@ -41,50 +43,142 @@ const generateInitialWeek = (): DayPlan[] => {
 
 export function useMealPlan() {
     const { toast } = useToast();
-    const [weekPlan, setWeekPlan] = useState<DayPlan[]>(() => {
-        const saved = localStorage.getItem("nexus_meal_plan");
-        if (saved) return JSON.parse(saved);
-        return generateInitialWeek();
-    });
+    const { family } = useFamily();
+    const [weekPlan, setWeekPlan] = useState<DayPlan[]>(generateInitialWeek());
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        localStorage.setItem("nexus_meal_plan", JSON.stringify(weekPlan));
-    }, [weekPlan]);
+        if (family?.id) {
+            fetchWeeklyPlan();
+        } else {
+            setWeekPlan(generateInitialWeek());
+            setLoading(false);
+        }
+    }, [family?.id]);
 
-    const addMeal = (date: string, meal: Meal) => {
+    const fetchWeeklyPlan = async () => {
+        if (!family?.id) return;
+        try {
+            // Fetch plans for the range dates in weekPlan
+            const startStr = weekPlan[0].date;
+            const endStr = weekPlan[6].date;
+
+            const { data, error } = await supabase
+                .from('meal_plans')
+                .select('*')
+                .eq('family_id', family.id)
+                .gte('date', startStr)
+                .lte('date', endStr);
+
+            if (error) throw error;
+
+            // Merge DB data into weekPlan structure
+            setWeekPlan(prev => prev.map(day => {
+                const dbRecord = data.find(r => r.date === day.date);
+                if (dbRecord && dbRecord.meals) {
+                    const meals = Array.isArray(dbRecord.meals) ? (dbRecord.meals as unknown as Meal[]) : [];
+                    return { ...day, meals };
+                }
+                return day;
+            }));
+
+        } catch (error) {
+            console.error("Error fetching meal plans:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const addMeal = async (date: string, meal: Meal) => {
+        if (!family?.id) return;
+
+        // Optimistic update
+        const previousPlan = [...weekPlan];
+
+        // Find current day's meals
+        const dayPlan = weekPlan.find(d => d.date === date);
+        if (!dayPlan) return;
+
+        const filteredMeals = dayPlan.meals.filter(m => m.type !== meal.type);
+        const newMeals = [...filteredMeals, meal];
+
+        // Update local state
         setWeekPlan((prev) =>
             prev.map((day) => {
                 if (day.date === date) {
-                    // Replace existing meal of same type if exists, or add new
-                    const filteredMeals = day.meals.filter(m => m.type !== meal.type);
-                    return { ...day, meals: [...filteredMeals, meal] };
+                    return { ...day, meals: newMeals };
                 }
                 return day;
             })
         );
+
         toast({
             title: "🍽️ Refeição planejada!",
             description: meal.name,
         });
+
+        // Sync to DB (Upsert)
+        try {
+            const { error } = await supabase
+                .from('meal_plans')
+                .upsert({
+                    family_id: family.id,
+                    date: date,
+                    meals: newMeals as unknown as any // Cast for Json compatibility
+                }, { onConflict: 'family_id,date' });
+
+            if (error) throw error;
+
+        } catch (error) {
+            console.error("Error saving meal:", error);
+            // Revert on error? Or just toast
+            toast({ title: "Erro ao salvar", variant: "destructive" });
+            setWeekPlan(previousPlan);
+        }
     };
 
-    const removeMeal = (date: string, mealId: string) => {
+    const removeMeal = async (date: string, mealId: string) => {
+        if (!family?.id) return;
+
+        const dayPlan = weekPlan.find(d => d.date === date);
+        if (!dayPlan) return;
+
+        const newMeals = dayPlan.meals.filter(m => m.id !== mealId);
+
         setWeekPlan((prev) =>
             prev.map((day) => {
                 if (day.date === date) {
-                    return { ...day, meals: day.meals.filter(m => m.id !== mealId) };
+                    return { ...day, meals: newMeals };
                 }
                 return day;
             })
         );
+
         toast({
             title: "Refeição removida",
         });
+
+        // Sync to DB
+        try {
+            const { error } = await supabase
+                .from('meal_plans')
+                .upsert({
+                    family_id: family.id,
+                    date: date,
+                    meals: newMeals as unknown as any // Cast for Json compatibility
+                }, { onConflict: 'family_id,date' });
+
+            if (error) throw error;
+        } catch (error) {
+            console.error("Error removing meal:", error);
+            toast({ title: "Erro ao salvar", variant: "destructive" });
+        }
     };
 
     return {
         weekPlan,
         addMeal,
         removeMeal,
+        loading
     };
 }

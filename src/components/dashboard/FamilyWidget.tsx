@@ -1,22 +1,8 @@
 import { Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
-
-interface FamilyMember {
-  id: string;
-  name: string;
-  role: "admin" | "member" | "pet";
-  avatar?: string;
-  tasksDone: number;
-}
-
-const familyMembers: FamilyMember[] = [
-  { id: "1", name: "Maria", role: "admin", tasksDone: 8 },
-  { id: "2", name: "João", role: "admin", tasksDone: 5 },
-  { id: "3", name: "Lucas", role: "member", tasksDone: 12 },
-  { id: "4", name: "Ana", role: "member", tasksDone: 9 },
-  { id: "5", name: "Rex", role: "pet", tasksDone: 0 },
-];
+import { useFamily } from "@/hooks/useFamily";
+import { useTasks } from "@/hooks/useTasks";
 
 const roleConfig = {
   admin: { label: "Administrador", color: "text-primary" },
@@ -33,6 +19,17 @@ const avatarColors = [
 ];
 
 export function FamilyWidget() {
+  const { members, loading: loadingFamily } = useFamily();
+  const { tasks } = useTasks();
+
+  if (loadingFamily) {
+    return (
+      <div className="bg-card rounded-2xl border border-border shadow-sm p-5 col-span-2 lg:col-span-1 h-[300px] flex items-center justify-center">
+        <p className="text-muted-foreground animate-pulse">Carregando família...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-card rounded-2xl border border-border shadow-sm p-5 col-span-2 lg:col-span-1 animate-fade-in" style={{ animationDelay: "400ms" }}>
       <div className="flex items-center justify-between mb-5">
@@ -42,42 +39,50 @@ export function FamilyWidget() {
           </div>
           <div>
             <h3 className="font-display font-semibold text-foreground">Família</h3>
-            <p className="text-xs text-muted-foreground">{familyMembers.length} membros</p>
+            <p className="text-xs text-muted-foreground">{members.length} membros</p>
           </div>
         </div>
-        <Link to="/membros" className="text-xs text-primary font-medium hover:underline">Gerenciar</Link>
+        <Link to="/settings" className="text-xs text-primary font-medium hover:underline">Gerenciar</Link>
       </div>
 
       {/* Members List */}
       <div className="space-y-2">
-        {familyMembers.map((member, index) => (
-          <div
-            key={member.id}
-            className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors"
-          >
-            <div
-              className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br",
-                avatarColors[index % avatarColors.length]
-              )}
-            >
-              <span className="text-sm font-bold text-white">
-                {member.name.charAt(0)}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground">{member.name}</p>
-              <p className={cn("text-xs", roleConfig[member.role].color)}>
-                {roleConfig[member.role].label}
-              </p>
-            </div>
-            {member.tasksDone > 0 && (
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                {member.tasksDone} tarefas
-              </span>
-            )}
-          </div>
-        ))}
+        {members.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">Nenhum membro encontrado.</p>
+        ) : (
+          members.map((member, index) => {
+            const tasksDone = tasks.filter(t => t.assignee === member.name && !t.completed).length; // Showing PENDING tasks as per "8 tarefas" context usually implies workload
+
+            return (
+              <div
+                key={member.id}
+                className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors"
+              >
+                <div
+                  className={cn(
+                    "w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br",
+                    avatarColors[index % avatarColors.length]
+                  )}
+                >
+                  <span className="text-sm font-bold text-white">
+                    {member.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{member.name}</p>
+                  <p className={cn("text-xs", roleConfig[member.role]?.color || "text-muted-foreground")}>
+                    {roleConfig[member.role]?.label || "Membro"}
+                  </p>
+                </div>
+                {tasksDone > 0 && (
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                    {tasksDone} tarefas
+                  </span>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

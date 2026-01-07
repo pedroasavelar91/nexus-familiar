@@ -33,31 +33,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-interface Vaccine {
-  id: string;
-  name: string;
-  member: string;
-  date: string;
-  nextDose?: string;
-  status: "uptodate" | "pending" | "overdue";
-}
-
-interface Medication {
-  id: string;
-  name: string;
-  member: string;
-  dosage: string;
-  frequency: string;
-  nextDose: string;
-}
-
-interface HealthContact {
-  id: string;
-  name: string;
-  specialty: string;
-  phone: string;
-  type: "doctor" | "clinic" | "emergency";
-}
+import { useHealth, Vaccine, Medication, HealthContact } from "@/hooks/useHealth";
 
 const statusConfig = {
   uptodate: { label: "Em dia", color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-900/30", icon: CheckCircle2 },
@@ -84,32 +60,26 @@ const ITEMS_PER_PAGE = 10;
 
 const Saude = () => {
   const { toast } = useToast();
+
+  const {
+    vaccines,
+    medications,
+    contacts,
+    loading,
+    addVaccine,
+    deleteVaccine,
+    addMedication,
+    deleteMedication,
+    addContact,
+    deleteContact
+  } = useHealth();
+
   const [activeTab, setActiveTab] = useState<"vaccines" | "medications" | "contacts">("vaccines");
   const [vaccineDialogOpen, setVaccineDialogOpen] = useState(false);
   const [medicationDialogOpen, setMedicationDialogOpen] = useState(false);
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-
-  const [vaccines, setVaccines] = useState<Vaccine[]>([
-    { id: "1", name: "Gripe", member: "Maria", date: "2024-01-15", status: "uptodate" },
-    { id: "2", name: "COVID-19 Reforço", member: "João", date: "2023-11-20", nextDose: "2024-05-20", status: "uptodate" },
-    { id: "3", name: "Tétano", member: "Lucas", date: "2020-03-10", nextDose: "2024-03-10", status: "pending" },
-    { id: "4", name: "V10 (Cachorro)", member: "Rex", date: "2023-06-15", nextDose: "2024-01-15", status: "overdue" },
-  ]);
-
-  const [medications, setMedications] = useState<Medication[]>([
-    { id: "1", name: "Losartana 50mg", member: "João", dosage: "1 comprimido", frequency: "1x ao dia", nextDose: "08:00" },
-    { id: "2", name: "Vitamina D", member: "Maria", dosage: "1 cápsula", frequency: "1x ao dia", nextDose: "12:00" },
-    { id: "3", name: "Suplemento Ômega 3", member: "Lucas", dosage: "2 cápsulas", frequency: "1x ao dia", nextDose: "07:00" },
-  ]);
-
-  const [contacts, setContacts] = useState<HealthContact[]>([
-    { id: "1", name: "Dr. Carlos Mendes", specialty: "Clínico Geral", phone: "(11) 99999-1234", type: "doctor" },
-    { id: "2", name: "Dra. Ana Paula", specialty: "Pediatra", phone: "(11) 99999-5678", type: "doctor" },
-    { id: "3", name: "PetVet Clínica", specialty: "Veterinário", phone: "(11) 3333-4444", type: "clinic" },
-    { id: "4", name: "SAMU", specialty: "Emergência", phone: "192", type: "emergency" },
-  ]);
 
   const [newVaccine, setNewVaccine] = useState({
     name: "",
@@ -141,25 +111,22 @@ const Saude = () => {
     if (!newVaccine.name) return;
 
     setSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
 
-    const vaccine: Vaccine = {
-      id: crypto.randomUUID(),
+    await addVaccine({
       name: newVaccine.name,
       member: newVaccine.member,
       date: newVaccine.date,
-      nextDose: newVaccine.nextDose || undefined,
-      status: "uptodate",
-    };
+      nextDose: newVaccine.nextDose,
+      status: "uptodate"
+    });
 
-    setVaccines(prev => [vaccine, ...prev]);
     setNewVaccine({ name: "", member: "Maria", date: new Date().toISOString().split("T")[0], nextDose: "" });
     setVaccineDialogOpen(false);
     setSubmitting(false);
 
     toast({
       title: "💉 Vacina registrada!",
-      description: `${vaccine.name} para ${vaccine.member}`,
+      description: `${newVaccine.name} para ${newVaccine.member}`,
     });
   };
 
@@ -168,25 +135,22 @@ const Saude = () => {
     if (!newMedication.name) return;
 
     setSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
 
-    const medication: Medication = {
-      id: crypto.randomUUID(),
+    await addMedication({
       name: newMedication.name,
       member: newMedication.member,
       dosage: newMedication.dosage,
       frequency: newMedication.frequency,
-      nextDose: newMedication.nextDose,
-    };
+      nextDose: newMedication.nextDose
+    });
 
-    setMedications(prev => [medication, ...prev]);
     setNewMedication({ name: "", member: "Maria", dosage: "", frequency: "1x ao dia", nextDose: "08:00" });
     setMedicationDialogOpen(false);
     setSubmitting(false);
 
     toast({
       title: "💊 Medicamento adicionado!",
-      description: `${medication.name} para ${medication.member}`,
+      description: `${newMedication.name} para ${newMedication.member}`,
     });
   };
 
@@ -195,43 +159,22 @@ const Saude = () => {
     if (!newContact.name || !newContact.phone) return;
 
     setSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
 
-    const contact: HealthContact = {
-      id: crypto.randomUUID(),
+    await addContact({
       name: newContact.name,
       specialty: newContact.specialty,
       phone: newContact.phone,
-      type: newContact.type,
-    };
+      type: newContact.type
+    });
 
-    setContacts(prev => [contact, ...prev]);
     setNewContact({ name: "", specialty: "", phone: "", type: "doctor" });
     setContactDialogOpen(false);
     setSubmitting(false);
 
     toast({
       title: "📞 Contato adicionado!",
-      description: contact.name,
+      description: newContact.name,
     });
-  };
-
-  const deleteVaccine = (id: string) => {
-    const vaccine = vaccines.find(v => v.id === id);
-    setVaccines(prev => prev.filter(v => v.id !== id));
-    toast({ title: "Vacina removida", description: vaccine?.name });
-  };
-
-  const deleteMedication = (id: string) => {
-    const med = medications.find(m => m.id === id);
-    setMedications(prev => prev.filter(m => m.id !== id));
-    toast({ title: "Medicamento removido", description: med?.name });
-  };
-
-  const deleteContact = (id: string) => {
-    const contact = contacts.find(c => c.id === id);
-    setContacts(prev => prev.filter(c => c.id !== id));
-    toast({ title: "Contato removido", description: contact?.name });
   };
 
   const getActiveDialogTrigger = () => {

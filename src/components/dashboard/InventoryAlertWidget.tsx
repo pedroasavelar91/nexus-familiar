@@ -1,20 +1,7 @@
 import { ShoppingBasket, AlertTriangle, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
-
-interface PantryItem {
-  id: string;
-  name: string;
-  category: string;
-  quantity: "empty" | "low" | "medium" | "full";
-}
-
-const lowItems: PantryItem[] = [
-  { id: "1", name: "Leite Integral", category: "Laticínios", quantity: "low" },
-  { id: "2", name: "Tomate", category: "Frutas e Verduras", quantity: "empty" },
-  { id: "3", name: "Detergente", category: "Limpeza", quantity: "low" },
-  { id: "4", name: "Ração do Rex", category: "Outros", quantity: "low" },
-];
+import { usePantry } from "@/hooks/usePantry";
 
 const quantityConfig = {
   empty: { label: "Vazio", color: "bg-rose-500", width: "w-0" },
@@ -24,7 +11,27 @@ const quantityConfig = {
 };
 
 export function InventoryAlertWidget() {
-  const criticalCount = lowItems.filter((i) => i.quantity === "low" || i.quantity === "empty").length;
+  const { items, loading } = usePantry();
+
+  // Determine item status
+  const getStatus = (current: number, ideal: number) => {
+    if (current === 0) return "empty";
+    if (current < ideal * 0.3) return "low";
+    if (current < ideal * 0.7) return "medium";
+    return "full";
+  };
+
+  const processedItems = items.map(item => ({
+    ...item,
+    status: getStatus(item.currentAmount, item.idealAmount)
+  }));
+
+  const lowItems = processedItems
+    .filter(i => i.status === "low" || i.status === "empty")
+    .slice(0, 4); // Limit to 4 items
+
+  const criticalCount = lowItems.length; // Actually we should count ALL critical items, not just the slice
+  const totalCriticalCount = processedItems.filter(i => i.status === "low" || i.status === "empty").length;
 
   return (
     <div className="bg-card rounded-2xl border border-border shadow-sm p-5 col-span-2 animate-fade-in" style={{ animationDelay: "300ms" }}>
@@ -36,7 +43,7 @@ export function InventoryAlertWidget() {
           <div>
             <h3 className="font-display font-semibold text-foreground">Despensa</h3>
             <p className="text-xs text-muted-foreground">
-              {criticalCount} itens precisam de reposição
+              {totalCriticalCount} itens precisam de reposição
             </p>
           </div>
         </div>
@@ -47,34 +54,40 @@ export function InventoryAlertWidget() {
       </div>
 
       {/* Alert Banner */}
-      {criticalCount > 0 && (
+      {totalCriticalCount > 0 && (
         <div className="flex items-center gap-3 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/30 mb-4">
           <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0" />
           <p className="text-sm text-foreground">
-            <span className="font-semibold">{criticalCount} itens</span> em nível crítico
+            <span className="font-semibold">{totalCriticalCount} itens</span> em nível crítico
           </p>
         </div>
       )}
 
       {/* Items Grid */}
       <div className="grid grid-cols-2 gap-3">
-        {lowItems.map((item) => {
-          const config = quantityConfig[item.quantity];
-          return (
-            <div
-              key={item.id}
-              className="p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+        {loading ? (
+          <div className="col-span-2 text-center text-sm text-muted-foreground">Carregando...</div>
+        ) : lowItems.length === 0 ? (
+          <div className="col-span-2 text-center text-sm text-muted-foreground py-2">Tudo em ordem na despensa!</div>
+        ) : (
+          lowItems.map((item) => {
+            const config = quantityConfig[item.status as keyof typeof quantityConfig];
+            return (
+              <div
+                key={item.id}
+                className="p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+                </div>
+                <p className="text-xs text-muted-foreground mb-2">{item.category}</p>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className={cn("h-full rounded-full transition-all", config.color, config.width)} />
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mb-2">{item.category}</p>
-              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                <div className={cn("h-full rounded-full transition-all", config.color, config.width)} />
-              </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     </div>
   );

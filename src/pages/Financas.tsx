@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { 
-  Wallet, TrendingUp, TrendingDown, CreditCard, 
+import {
+  Wallet, TrendingUp, TrendingDown, CreditCard,
   Calendar, Plus, ArrowUpRight, ArrowDownRight,
   PiggyBank, Receipt, Filter, Loader2,
-  Target, Sparkles, ChevronLeft, ChevronRight
+  Target, Sparkles, ChevronLeft, ChevronRight,
+  Trash2, Ban
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,35 +74,28 @@ const statusConfig = {
   overdue: { label: "Atrasado", class: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400" },
 };
 
+import { useTransactions } from "@/hooks/useTransactions";
+import { useBills } from "@/hooks/useBills";
+import { useInvestments } from "@/hooks/useInvestments";
+
+// ... (keep categories, monthNames, getCategoryConfig, statusConfig)
+
 const Financas = () => {
   const { toast } = useToast();
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [filterType, setFilterType] = useState<"month" | "year">("month");
-  const [activeTab, setActiveTab] = useState<"overview" | "transactions" | "bills">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "transactions" | "bills" | "investments">("overview");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [billDialogOpen, setBillDialogOpen] = useState(false);
+  const [assetDialogOpen, setAssetDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    { id: "1", description: "Salário", amount: 8500, type: "income", category: "Renda", date: "2024-01-05", icon: "💰", month: 0, year: 2024 },
-    { id: "2", description: "Supermercado Extra", amount: 456.78, type: "expense", category: "Mercado", date: "2024-01-04", icon: "🛒", month: 0, year: 2024 },
-    { id: "3", description: "Conta de Luz", amount: 245.30, type: "expense", category: "Contas", date: "2024-01-03", icon: "📄", month: 0, year: 2024 },
-    { id: "4", description: "Freelance Design", amount: 1200, type: "income", category: "Renda Extra", date: "2024-01-02", icon: "✨", month: 0, year: 2024 },
-    { id: "5", description: "Farmácia", amount: 89.90, type: "expense", category: "Saúde", date: "2024-01-02", icon: "💊", month: 0, year: 2024 },
-    { id: "6", description: "Uber", amount: 35.50, type: "expense", category: "Transporte", date: "2024-01-01", icon: "🚗", month: 0, year: 2024 },
-    { id: "7", description: "Salário", amount: 8500, type: "income", category: "Renda", date: "2023-12-05", icon: "💰", month: 11, year: 2023 },
-    { id: "8", description: "Presente Natal", amount: 350, type: "expense", category: "Lazer", date: "2023-12-20", icon: "🎬", month: 11, year: 2023 },
-  ]);
-
-  const [bills, setBills] = useState<Bill[]>([
-    { id: "1", description: "Internet Vivo", amount: 129.90, dueDate: "2024-01-10", status: "pending", month: 0, year: 2024 },
-    { id: "2", description: "Água SABESP", amount: 87.45, dueDate: "2024-01-15", status: "pending", month: 0, year: 2024 },
-    { id: "3", description: "Netflix", amount: 55.90, dueDate: "2024-01-08", status: "paid", month: 0, year: 2024 },
-    { id: "4", description: "Condomínio", amount: 650.00, dueDate: "2024-01-05", status: "overdue", month: 0, year: 2024 },
-    { id: "5", description: "Spotify", amount: 21.90, dueDate: "2024-01-20", status: "pending", month: 0, year: 2024 },
-  ]);
+  // Hooks for data fetching
+  const { transactions, loading: loadingTransactions, addTransaction } = useTransactions(selectedMonth, selectedYear);
+  const { bills, loading: loadingBills, addBill, toggleBillStatus } = useBills(selectedMonth, selectedYear);
+  const { assets, loading: loadingAssets, addAsset, deleteAsset } = useInvestments();
 
   const [newTransaction, setNewTransaction] = useState({
     description: "",
@@ -116,28 +110,26 @@ const Financas = () => {
     dueDate: "",
   });
 
-  // Filter transactions based on selected period
-  const filteredTransactions = transactions.filter(t => {
-    if (filterType === "month") {
-      return t.month === selectedMonth && t.year === selectedYear;
-    }
-    return t.year === selectedYear;
+  const [newAsset, setNewAsset] = useState({
+    name: "",
+    amount: "",
+    type: "investment" as "investment" | "savings",
   });
 
-  const filteredBills = bills.filter(b => {
-    if (filterType === "month") {
-      return b.month === selectedMonth && b.year === selectedYear;
-    }
-    return b.year === selectedYear;
-  });
 
-  const totalBalance = 12450.00;
+  // Calculate totals from fetched data
+  const monthlyIncome = transactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0);
+  const monthlyExpenses = transactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0);
+  const totalBalance = monthlyIncome - monthlyExpenses; // Simplified balance calculation for now (or fetch global balance if needed)
+
   const monthlyBudget = 5000;
-  const monthlyIncome = filteredTransactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0);
-  const monthlyExpenses = filteredTransactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0);
   const budgetUsed = monthlyBudget > 0 ? (monthlyExpenses / monthlyBudget) * 100 : 0;
-  const pendingBills = filteredBills.filter(b => b.status === "pending").reduce((acc, b) => acc + b.amount, 0);
-  const overdueBills = filteredBills.filter(b => b.status === "overdue").length;
+
+  const pendingBills = bills.filter(b => b.status === "pending").reduce((acc, b) => acc + b.amount, 0);
+  const overdueBills = bills.filter(b => b.status === "overdue").length;
+
+  const totalInvested = assets.reduce((acc, a) => acc + a.amount, 0);
+
 
   const navigatePeriod = (direction: "prev" | "next") => {
     if (filterType === "month") {
@@ -166,30 +158,22 @@ const Financas = () => {
     if (!newTransaction.description || !newTransaction.amount) return;
 
     setSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
 
+    // Get icon for category
     const categoryConfig = getCategoryConfig(newTransaction.category);
-    const transaction: Transaction = {
-      id: crypto.randomUUID(),
+
+    await addTransaction({
       description: newTransaction.description,
       amount: parseFloat(newTransaction.amount),
       type: newTransaction.type,
       category: newTransaction.category,
-      date: new Date().toISOString().split("T")[0],
-      icon: categoryConfig.icon,
-      month: selectedMonth,
-      year: selectedYear,
-    };
+      date: new Date().toISOString().split("T")[0], // Default to today or let user choose? Mock used today.
+      icon: categoryConfig.icon
+    });
 
-    setTransactions(prev => [transaction, ...prev]);
     setNewTransaction({ description: "", amount: "", type: "expense", category: "Mercado" });
     setDialogOpen(false);
     setSubmitting(false);
-
-    toast({
-      title: "Transação adicionada!",
-      description: `${transaction.description} - R$ ${transaction.amount.toFixed(2)}`,
-    });
   };
 
   const handleAddBill = async (e: React.FormEvent) => {
@@ -197,42 +181,39 @@ const Financas = () => {
     if (!newBill.description || !newBill.amount || !newBill.dueDate) return;
 
     setSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
 
-    const bill: Bill = {
-      id: crypto.randomUUID(),
+    await addBill({
       description: newBill.description,
       amount: parseFloat(newBill.amount),
-      dueDate: newBill.dueDate,
-      status: "pending",
-      month: selectedMonth,
-      year: selectedYear,
-    };
+      dueDate: newBill.dueDate
+    });
 
-    setBills(prev => [bill, ...prev]);
     setNewBill({ description: "", amount: "", dueDate: "" });
     setBillDialogOpen(false);
     setSubmitting(false);
+  };
 
-    toast({
-      title: "Conta adicionada!",
-      description: `${bill.description} - Vence em ${new Date(bill.dueDate).toLocaleDateString("pt-BR")}`,
+  const handleAddAsset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAsset.name || !newAsset.amount) return;
+
+    setSubmitting(true);
+
+    await addAsset({
+      name: newAsset.name,
+      amount: parseFloat(newAsset.amount),
+      type: newAsset.type,
+      color: newAsset.type === "investment" ? "bg-purple-500" : "bg-emerald-500"
     });
+
+    setNewAsset({ name: "", amount: "", type: "investment" });
+    setAssetDialogOpen(false);
+    setSubmitting(false);
   };
 
-  const toggleBillStatus = (billId: string) => {
-    setBills(prev => prev.map(bill => {
-      if (bill.id === billId) {
-        const newStatus = bill.status === "paid" ? "pending" : "paid";
-        toast({
-          title: newStatus === "paid" ? "✓ Conta paga!" : "Conta reaberta",
-          description: bill.description,
-        });
-        return { ...bill, status: newStatus };
-      }
-      return bill;
-    }));
-  };
+  // Note: filteredTransactions and filteredBills logic is now handled by the hook based on selectedMonth/Year arguments passed to it.
+  // We can just use 'transactions' and 'bills' directly.
+
 
   return (
     <div className="min-h-screen pb-24 lg:pb-8">
@@ -378,7 +359,7 @@ const Financas = () => {
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => navigatePeriod("prev")}
                 className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"
               >
@@ -387,7 +368,7 @@ const Financas = () => {
               <span className="text-white font-medium min-w-[120px] text-center">
                 {filterType === "month" ? `${monthNames[selectedMonth]} ${selectedYear}` : selectedYear}
               </span>
-              <button 
+              <button
                 onClick={() => navigatePeriod("next")}
                 className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"
               >
@@ -482,6 +463,7 @@ const Financas = () => {
             { id: "overview", label: "Resumo", icon: TrendingUp },
             { id: "transactions", label: "Transações", icon: Receipt },
             { id: "bills", label: "Contas", icon: Calendar },
+            { id: "investments", label: "Investimentos", icon: PiggyBank },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -506,7 +488,7 @@ const Financas = () => {
             <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <h3 className="font-display font-semibold text-foreground">Transações do Período</h3>
-                <button 
+                <button
                   onClick={() => setActiveTab("transactions")}
                   className="text-xs text-primary font-medium hover:underline"
                 >
@@ -514,12 +496,12 @@ const Financas = () => {
                 </button>
               </div>
               <div className="divide-y divide-border">
-                {filteredTransactions.length === 0 ? (
+                {transactions.length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground">
                     Nenhuma transação neste período
                   </div>
                 ) : (
-                  filteredTransactions.slice(0, 5).map((tx) => (
+                  transactions.slice(0, 5).map((tx) => (
                     <div key={tx.id} className="flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors">
                       <div className={cn(
                         "w-11 h-11 rounded-xl flex items-center justify-center text-lg",
@@ -602,26 +584,26 @@ const Financas = () => {
                 </Dialog>
               </div>
               <div className="divide-y divide-border">
-                {filteredBills.length === 0 ? (
+                {bills.length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground">
                     Nenhuma conta neste período
                   </div>
                 ) : (
-                  filteredBills.slice(0, 5).map((bill) => (
-                    <div 
-                      key={bill.id} 
+                  bills.slice(0, 5).map((bill) => (
+                    <div
+                      key={bill.id}
                       className="flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => toggleBillStatus(bill.id)}
+                      onClick={() => toggleBillStatus(bill.id, bill.status)}
                     >
                       <div className={cn(
                         "w-11 h-11 rounded-xl flex items-center justify-center",
-                        bill.status === "paid" ? "bg-emerald-100 dark:bg-emerald-900/30" : 
-                        bill.status === "overdue" ? "bg-rose-100 dark:bg-rose-900/30" : "bg-amber-100 dark:bg-amber-900/30"
+                        bill.status === "paid" ? "bg-emerald-100 dark:bg-emerald-900/30" :
+                          bill.status === "overdue" ? "bg-rose-100 dark:bg-rose-900/30" : "bg-amber-100 dark:bg-amber-900/30"
                       )}>
                         <CreditCard className={cn(
                           "w-5 h-5",
-                          bill.status === "paid" ? "text-emerald-600" : 
-                          bill.status === "overdue" ? "text-rose-600" : "text-amber-600"
+                          bill.status === "paid" ? "text-emerald-600" :
+                            bill.status === "overdue" ? "text-rose-600" : "text-amber-600"
                         )} />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -654,12 +636,12 @@ const Financas = () => {
               </Button>
             </div>
             <div className="divide-y divide-border">
-              {filteredTransactions.length === 0 ? (
+              {transactions.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground">
                   Nenhuma transação neste período
                 </div>
               ) : (
-                filteredTransactions.map((tx) => (
+                transactions.map((tx) => (
                   <div key={tx.id} className="flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors">
                     <div className={cn(
                       "w-11 h-11 rounded-xl flex items-center justify-center text-lg",
@@ -744,31 +726,31 @@ const Financas = () => {
               </Dialog>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredBills.length === 0 ? (
+              {bills.length === 0 ? (
                 <div className="col-span-full p-8 text-center text-muted-foreground bg-card rounded-2xl border border-border">
                   Nenhuma conta neste período
                 </div>
               ) : (
-                filteredBills.map((bill) => (
-                  <div 
-                    key={bill.id} 
-                    onClick={() => toggleBillStatus(bill.id)}
+                bills.map((bill) => (
+                  <div
+                    key={bill.id}
+                    onClick={() => toggleBillStatus(bill.id, bill.status)}
                     className={cn(
                       "bg-card rounded-2xl border-2 p-4 cursor-pointer transition-all hover:shadow-md",
-                      bill.status === "paid" ? "border-emerald-200 dark:border-emerald-800" : 
-                      bill.status === "overdue" ? "border-rose-200 dark:border-rose-800" : "border-border"
+                      bill.status === "paid" ? "border-emerald-200 dark:border-emerald-800" :
+                        bill.status === "overdue" ? "border-rose-200 dark:border-rose-800" : "border-border"
                     )}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className={cn(
                         "w-10 h-10 rounded-xl flex items-center justify-center",
-                        bill.status === "paid" ? "bg-emerald-100 dark:bg-emerald-900/30" : 
-                        bill.status === "overdue" ? "bg-rose-100 dark:bg-rose-900/30" : "bg-amber-100 dark:bg-amber-900/30"
+                        bill.status === "paid" ? "bg-emerald-100 dark:bg-emerald-900/30" :
+                          bill.status === "overdue" ? "bg-rose-100 dark:bg-rose-900/30" : "bg-amber-100 dark:bg-amber-900/30"
                       )}>
                         <CreditCard className={cn(
                           "w-5 h-5",
-                          bill.status === "paid" ? "text-emerald-600" : 
-                          bill.status === "overdue" ? "text-rose-600" : "text-amber-600"
+                          bill.status === "paid" ? "text-emerald-600" :
+                            bill.status === "overdue" ? "text-rose-600" : "text-amber-600"
                         )} />
                       </div>
                       <span className={cn("text-xs px-2 py-1 rounded-full font-medium", statusConfig[bill.status].class)}>
@@ -782,6 +764,150 @@ const Financas = () => {
                     </p>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "investments" && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Patrimônio</h3>
+                <p className="text-sm text-muted-foreground">Gerencie seus investimentos e economias</p>
+              </div>
+              <Dialog open={assetDialogOpen} onOpenChange={setAssetDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-2 rounded-full">
+                    <Plus className="w-4 h-4" />
+                    Novo Ativo
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl">Novo Ativo</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleAddAsset} className="space-y-5 mt-4">
+                    <div className="space-y-2">
+                      <Label>Tipo</Label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setNewAsset({ ...newAsset, type: "investment" })}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl border-2 text-sm font-medium transition-all",
+                            newAsset.type === "investment"
+                              ? "border-purple-500 bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300"
+                              : "border-border hover:border-muted-foreground/50"
+                          )}
+                        >
+                          Investimento
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewAsset({ ...newAsset, type: "savings" })}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl border-2 text-sm font-medium transition-all",
+                            newAsset.type === "savings"
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"
+                              : "border-border hover:border-muted-foreground/50"
+                          )}
+                        >
+                          Economia
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="assetName">Nome</Label>
+                      <Input
+                        id="assetName"
+                        value={newAsset.name}
+                        onChange={(e) => setNewAsset({ ...newAsset, name: e.target.value })}
+                        placeholder="Ex: Tesouro Direto, Poupança..."
+                        className="h-12 rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="assetAmount">Valor Atual (R$)</Label>
+                      <Input
+                        id="assetAmount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newAsset.amount}
+                        onChange={(e) => setNewAsset({ ...newAsset, amount: e.target.value })}
+                        placeholder="0,00"
+                        className="h-12 rounded-xl text-lg font-semibold"
+                        required
+                      />
+                    </div>
+                    <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
+                      {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Ativo"}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-purple-500/20">
+                <p className="text-purple-100 text-sm mb-1">Total Acumulado</p>
+                <p className="font-display text-3xl font-bold">
+                  R$ {totalInvested.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="font-medium text-muted-foreground">Seus Ativos</h4>
+              {assets.length === 0 ? (
+                <div className="p-12 text-center border-2 border-dashed border-border rounded-xl">
+                  <PiggyBank className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                  <p className="text-muted-foreground font-medium">Você ainda não cadastrou nenhum ativo.</p>
+                  <p className="text-sm text-muted-foreground/60">Adicione seus investimentos e economias para acompanhar seu patrimônio.</p>
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {assets.map((asset) => (
+                    <div key={asset.id} className="bg-card p-4 rounded-xl border border-border flex items-center justify-between group">
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "w-12 h-12 rounded-xl flex items-center justify-center text-xl",
+                          asset.type === "investment"
+                            ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
+                            : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
+                        )}>
+                          {asset.type === "investment" ? "📈" : "🐷"}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-foreground">{asset.name}</h4>
+                          <span className={cn(
+                            "text-xs px-2 py-0.5 rounded-full font-medium inline-block mt-1",
+                            asset.type === "investment"
+                              ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                          )}>
+                            {asset.type === "investment" ? "Investimento" : "Economia"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <p className="font-display text-lg font-bold">
+                          R$ {asset.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 opacity-0 group-hover:opacity-100 transition-all"
+                          onClick={() => deleteAsset(asset.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
