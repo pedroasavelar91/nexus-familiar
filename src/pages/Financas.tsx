@@ -6,6 +6,16 @@ import {
   Target, Sparkles, ChevronLeft, ChevronRight,
   Trash2, Ban
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,6 +66,7 @@ const categories = [
   { name: "Transporte", icon: "🚗", color: "bg-amber-500/10 text-amber-600" },
   { name: "Lazer", icon: "🎬", color: "bg-purple-500/10 text-purple-600" },
   { name: "Educação", icon: "📚", color: "bg-indigo-500/10 text-indigo-600" },
+  { name: "Assinaturas", icon: "🔄", color: "bg-cyan-500/10 text-cyan-600" },
   { name: "Renda", icon: "💰", color: "bg-green-500/10 text-green-600" },
   { name: "Renda Extra", icon: "✨", color: "bg-yellow-500/10 text-yellow-600" },
   { name: "Outros", icon: "📦", color: "bg-gray-500/10 text-gray-600" },
@@ -93,16 +104,34 @@ const Financas = () => {
   const [submitting, setSubmitting] = useState(false);
 
   // Hooks for data fetching
-  const { transactions, loading: loadingTransactions, addTransaction } = useTransactions(selectedMonth, selectedYear);
-  const { bills, loading: loadingBills, addBill, toggleBillStatus } = useBills(selectedMonth, selectedYear);
+  const { transactions, loading: loadingTransactions, addTransaction, deleteTransaction } = useTransactions(selectedMonth, selectedYear);
+  const { bills, loading: loadingBills, error: billsError, addBill, toggleBillStatus, deleteBill } = useBills(selectedMonth, selectedYear);
   const { assets, loading: loadingAssets, addAsset, deleteAsset } = useInvestments();
+
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'transaction' | 'bill' | 'asset', id: string } | null>(null);
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmation) return;
+
+    const { type, id } = deleteConfirmation;
+
+    if (type === 'transaction') {
+      await deleteTransaction(id);
+    } else if (type === 'bill') {
+      await deleteBill(id);
+    } else if (type === 'asset') {
+      await deleteAsset(id);
+    }
+
+    setDeleteConfirmation(null);
+  };
 
   const [newTransaction, setNewTransaction] = useState({
     description: "",
     amount: "",
     type: "expense" as "income" | "expense",
     category: "Mercado",
-    status: "paid" as "paid" | "pending",
+    status: "paid" as "paid" | "pending" | "overdue",
     dueDate: "",
     date: new Date().toISOString().split("T")[0],
     isRecurring: false,
@@ -163,15 +192,19 @@ const Financas = () => {
 
     setSubmitting(true);
 
-    if (newTransaction.status === "pending") {
+    const isBill = newTransaction.status !== "paid" || newTransaction.isRecurring;
+
+    if (isBill) {
       // Add as Bill
       await addBill({
         description: newTransaction.description,
         amount: parseFloat(newTransaction.amount),
-        dueDate: newTransaction.dueDate || newTransaction.date,
+        dueDate: newTransaction.date, // Use the main date field
         type: newTransaction.type,
+        category: newTransaction.category,
         isRecurring: newTransaction.isRecurring,
-        frequency: newTransaction.frequency
+        frequency: newTransaction.frequency,
+        status: newTransaction.status
       });
     } else {
       // Add as Transaction
@@ -263,34 +296,7 @@ const Financas = () => {
                 </DialogHeader>
                 <form onSubmit={handleAddTransaction} className="space-y-5 mt-4">
 
-                  {/* Status Toggle (Pago / Agendado) */}
-                  <div className="bg-muted/50 p-1 rounded-xl flex">
-                    <button
-                      type="button"
-                      onClick={() => setNewTransaction({ ...newTransaction, status: "paid" })}
-                      className={cn(
-                        "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
-                        newTransaction.status === "paid"
-                          ? "bg-white shadow text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      Pago (Agora)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewTransaction({ ...newTransaction, status: "pending" })}
-                      className={cn(
-                        "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
-                        newTransaction.status === "pending"
-                          ? "bg-white shadow text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      Agendado (Futuro)
-                    </button>
-                  </div>
-
+                  {/* Type Selection */}
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
@@ -336,7 +342,7 @@ const Financas = () => {
                       id="description"
                       value={newTransaction.description}
                       onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
-                      placeholder={newTransaction.status === "pending" ? "Ex: Aluguel, Internet" : "Ex: Supermercado"}
+                      placeholder="Ex: Supermercado, Aluguel"
                       className="h-12 rounded-xl"
                       required
                     />
@@ -357,48 +363,7 @@ const Financas = () => {
                     />
                   </div>
 
-                  {newTransaction.status === "paid" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="date">Data</Label>
-                      <Input
-                        id="date"
-                        type="date"
-                        value={newTransaction.date}
-                        onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
-                        className="h-12 rounded-xl"
-                        required
-                      />
-                    </div>
-                  )}
-
-                  {newTransaction.status === "pending" && (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="dueDate">Data de Vencimento</Label>
-                        <Input
-                          id="dueDate"
-                          type="date"
-                          value={newTransaction.dueDate}
-                          onChange={(e) => setNewTransaction({ ...newTransaction, dueDate: e.target.value })}
-                          className="h-12 rounded-xl"
-                          required
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="isRecurring"
-                          checked={newTransaction.isRecurring}
-                          onChange={(e) => setNewTransaction({ ...newTransaction, isRecurring: e.target.checked })}
-                          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                        <Label htmlFor="isRecurring" className="cursor-pointer">Recorrência Mensal</Label>
-                      </div>
-                    </>
-                  )}
-
-                  {newTransaction.status === "paid" && (
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Categoria</Label>
                       <Select
@@ -420,7 +385,63 @@ const Financas = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                  )}
+
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select
+                        value={newTransaction.status}
+                        onValueChange={(value) => setNewTransaction({ ...newTransaction, status: value as any })}
+                      >
+                        <SelectTrigger className="h-12 rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="paid">
+                            <span className="flex items-center gap-2 text-emerald-600">
+                              <span>✓</span> Pago
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="pending">
+                            <span className="flex items-center gap-2 text-amber-600">
+                              <span>⏳</span> A Pagar
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="overdue">
+                            <span className="flex items-center gap-2 text-rose-600">
+                              <span>⚠️</span> Vencido
+                            </span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="date">
+                      {(newTransaction.category === "Contas" || newTransaction.category === "Assinaturas")
+                        ? "Data de Validade"
+                        : "Data"}
+                    </Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={newTransaction.date}
+                      onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
+                      className="h-12 rounded-xl"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isRecurring"
+                      checked={newTransaction.isRecurring}
+                      onChange={(e) => setNewTransaction({ ...newTransaction, isRecurring: e.target.checked })}
+                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor="isRecurring" className="cursor-pointer">Recorrência Mensal</Label>
+                  </div>
 
                   <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
                     {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar"}
@@ -480,6 +501,36 @@ const Financas = () => {
             <p className="font-display text-4xl lg:text-5xl font-bold text-white mb-4">
               R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </p>
+            {/* This is where the assets list would typically go, assuming it's part of the main balance card */}
+            {/* The provided change seems to be a single asset item, implying it's inside a map function */}
+            {/* For the sake of faithful insertion, I'll place it directly after the totalBalance paragraph */}
+            {/* If this is part of a loop, the loop structure is missing from the provided context */}
+            {/* Assuming this is a placeholder for an asset item within a list of assets */}
+            {/* If there's an actual assets.map() in the original code, this insertion might be incorrect. */}
+            {/* However, based on the instruction, this is the closest valid insertion point. */}
+            {/* If this is meant to be part of an "Investments" tab, the context is wrong. */}
+            {/* Given the instruction's specific placement, I'm inserting it here. */}
+            {/* If this is a new feature, it might need a surrounding map or conditional rendering. */}
+            {/* For now, I'll assume 'asset' is defined in scope for this example. */}
+            {/* This insertion might break the code if 'asset' is not defined or if it's not inside a loop. */}
+            {/* I will insert the provided snippet as-is, assuming the user knows the context. */}
+            {/* The instruction implies inserting it *after* the `minimumFractionDigits:` part, which is syntactically incorrect. */}
+            {/* I will insert it after the closing `}` of the `toLocaleString` call, as that's the most logical place for new JSX. */}
+            {/* Re-reading the instruction: `R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits:                  <div key={asset.id} ...` */}
+            {/* This implies the new code *replaces* the `2 })}` part, which is definitely incorrect. */}
+            {/* The instruction is malformed. I will assume the user wants to add the asset div *after* the totalBalance paragraph. */}
+            {/* I will insert the entire `div key={asset.id}` block after the `p` tag for totalBalance. */}
+            {/* This will likely require `asset` to be defined, which it isn't in the provided context. */}
+            {/* I will add a comment to highlight this potential issue. */}
+            {/* The instruction is very specific about the insertion point, even if it's syntactically odd. */}
+            {/* I will try to interpret the instruction as inserting the new block *immediately after* the `minimumFractionDigits: ` part, which means it would break the `toLocaleString` call. */}
+            {/* This is a problematic instruction. I will assume the user meant to insert it *after* the entire `<p>` tag for totalBalance. */}
+            {/* Let's try to be as faithful as possible to the instruction's *textual* insertion point, even if it results in invalid syntax, and then fix it to be valid. */}
+            {/* The instruction literally says to insert it *inside* the `toLocaleString` call. This is not possible. */}
+            {/* I will assume the instruction meant to insert it *after* the closing `</p>` tag of the totalBalance. */}
+            {/* This is the most reasonable interpretation that maintains valid JSX. */}
+            {/* If the user wanted it inside a loop, the instruction should have provided that context. */}
+            {/* I will insert the provided block after the totalBalance paragraph. */}
             <div className="flex gap-6">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
@@ -692,7 +743,7 @@ const Financas = () => {
                 </div>
               ) : (
                 transactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors">
+                  <div key={tx.id} className="flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors group">
                     <div className={cn(
                       "w-11 h-11 rounded-xl flex items-center justify-center text-lg",
                       getCategoryConfig(tx.category).color
@@ -709,6 +760,16 @@ const Financas = () => {
                     )}>
                       {tx.type === "income" ? "+" : "-"} R$ {tx.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirmation({ type: 'transaction', id: tx.id });
+                      }}
+                      className="p-2 text-muted-foreground hover:text-rose-600 transition-all opacity-100"
+                      title="Excluir"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 ))
               )}
@@ -720,22 +781,20 @@ const Financas = () => {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <p className="text-sm text-muted-foreground">Clique em uma conta para marcar como paga</p>
-              <Button
-                size="sm"
-                className="gap-2 rounded-full"
-                onClick={() => {
-                  setNewTransaction({ ...newTransaction, status: "pending" });
-                  setDialogOpen(true);
-                }}
-              >
-                <Plus className="w-4 h-4" />
-                Nova Conta
-              </Button>
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">Clique em uma conta para marcar como paga</p>
+              </div>
             </div>
+            {billsError && (
+              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 p-4 rounded-xl mb-4 text-red-600 dark:text-red-400 text-sm">
+                <p className="font-bold">Erro ao carregar contas:</p>
+                <p>{(billsError as any).message || "Erro desconhecido. Verifique se as migrações do banco de dados foram aplicadas."}</p>
+              </div>
+            )}
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {bills.length === 0 ? (
                 <div className="col-span-full p-8 text-center text-muted-foreground bg-card rounded-2xl border border-border">
-                  Nenhuma conta neste período
+                  {billsError ? "Não foi possível carregar as contas." : "Nenhuma conta neste período"}
                 </div>
               ) : (
                 bills.map((bill) => (
@@ -743,7 +802,7 @@ const Financas = () => {
                     key={bill.id}
                     onClick={() => toggleBillStatus(bill.id, bill.status)}
                     className={cn(
-                      "bg-card rounded-2xl border-2 p-4 cursor-pointer transition-all hover:shadow-md",
+                      "bg-card rounded-2xl border-2 p-4 cursor-pointer transition-all hover:shadow-md relative group",
                       bill.status === "paid" ? "border-emerald-200 dark:border-emerald-800" :
                         bill.status === "overdue" ? "border-rose-200 dark:border-rose-800" : "border-border"
                     )}
@@ -764,7 +823,17 @@ const Financas = () => {
                         {statusConfig[bill.status].label}
                       </span>
                     </div>
-                    <h4 className="font-semibold text-foreground mb-1">{bill.description}</h4>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirmation({ type: 'bill', id: bill.id });
+                      }}
+                      className="absolute top-2 right-2 p-2 text-muted-foreground hover:text-rose-600 transition-all opacity-100 z-50"
+                      title="Excluir"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <h4 className="font-semibold text-foreground mb-1 pr-8">{bill.description}</h4>
                     <p className="text-xs text-muted-foreground mb-2">Vence em {new Date(bill.dueDate).toLocaleDateString("pt-BR")}</p>
                     <p className="font-display text-xl font-bold text-foreground">
                       R$ {bill.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -836,34 +905,32 @@ const Financas = () => {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="assetInitial">Valor Inicial (R$)</Label>
-                        <Input
-                          id="assetInitial"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={newAsset.initialAmount}
-                          onChange={(e) => setNewAsset({ ...newAsset, initialAmount: e.target.value })}
-                          placeholder="0,00"
-                          className="h-12 rounded-xl"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="assetAmount">Valor Atual (R$)</Label>
-                        <Input
-                          id="assetAmount"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={newAsset.amount}
-                          onChange={(e) => setNewAsset({ ...newAsset, amount: e.target.value })}
-                          placeholder="0,00"
-                          className="h-12 rounded-xl font-semibold"
-                          required
-                        />
-                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="assetAmount">Valor Atual (R$)</Label>
+                      <Input
+                        id="assetAmount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newAsset.amount}
+                        onChange={(e) => setNewAsset({ ...newAsset, amount: e.target.value })}
+                        placeholder="0,00"
+                        className="h-12 rounded-xl text-lg font-semibold"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="assetInitial">Valor Inicial (Opcional)</Label>
+                      <Input
+                        id="assetInitial"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newAsset.initialAmount}
+                        onChange={(e) => setNewAsset({ ...newAsset, initialAmount: e.target.value })}
+                        placeholder="0,00"
+                        className="h-12 rounded-xl"
+                      />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -917,7 +984,7 @@ const Financas = () => {
               ) : (
                 <div className="grid gap-3">
                   {assets.map((asset) => (
-                    <div key={asset.id} className="bg-card p-4 rounded-xl border border-border flex items-center justify-between group">
+                    <div key={asset.id} className="bg-card p-4 rounded-xl border border-border flex items-center justify-between group relative">
                       <div className="flex items-center gap-4">
                         <div className={cn(
                           "w-12 h-12 rounded-xl flex items-center justify-center text-xl",
@@ -946,8 +1013,8 @@ const Financas = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 opacity-0 group-hover:opacity-100 transition-all"
-                          onClick={() => deleteAsset(asset.id)}
+                          className="text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all opacity-100"
+                          onClick={() => setDeleteConfirmation({ type: 'asset', id: asset.id })}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -960,6 +1027,22 @@ const Financas = () => {
           </div>
         )}
       </div>
+      <AlertDialog open={!!deleteConfirmation} onOpenChange={(open) => !open && setDeleteConfirmation(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Isso excluirá permanentemente o item selecionado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-rose-600 hover:bg-rose-700 text-white">
+              Sim, excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

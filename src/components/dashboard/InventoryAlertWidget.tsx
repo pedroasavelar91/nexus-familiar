@@ -10,6 +10,15 @@ const quantityConfig = {
   full: { label: "Cheio", color: "bg-emerald-500", width: "w-full" },
 };
 
+const categoryMap: Record<string, string> = {
+  dairy: "Laticínios",
+  fruits: "Frutas e Verduras",
+  proteins: "Carnes e Proteínas",
+  grains: "Grãos e Cereais",
+  cleaning: "Limpeza",
+  others: "Outros"
+};
+
 export function InventoryAlertWidget() {
   const { items, loading } = usePantry();
 
@@ -80,7 +89,7 @@ export function InventoryAlertWidget() {
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
                 </div>
-                <p className="text-xs text-muted-foreground mb-2">{item.category}</p>
+                <p className="text-xs text-muted-foreground mb-2">{categoryMap[item.category] || "Outros"}</p>
                 <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                   <div className={cn("h-full rounded-full transition-all", config.color, config.width)} />
                 </div>

@@ -10,6 +10,7 @@ export interface Bill {
     dueDate: string;
     status: "pending" | "paid" | "overdue";
     type: "income" | "expense";
+    category: string;
     isRecurring: boolean;
     frequency: string;
     month: number;
@@ -24,6 +25,7 @@ interface BillRow {
     due_date: string;
     status: string;
     type: string;
+    category: string;
     is_recurring: boolean;
     frequency: string;
     family_id: string;
@@ -34,6 +36,7 @@ export function useBills(selectedMonth: number, selectedYear: number) {
     const { family } = useFamily();
     const [bills, setBills] = useState<Bill[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<any>(null); // New error state
 
     useEffect(() => {
         if (family?.id) {
@@ -47,18 +50,29 @@ export function useBills(selectedMonth: number, selectedYear: number) {
     const fetchBills = async () => {
         if (!family?.id) return;
         setLoading(true);
+        setError(null); // Reset error
 
         // Calculate range for bills (based on due date)
-        const startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
-        const endDate = new Date(selectedYear, selectedMonth + 1, 0).toISOString();
+        // Adjust date to avoid timezone issues with ISOString
+        const start = new Date(selectedYear, selectedMonth, 1);
+        const end = new Date(selectedYear, selectedMonth + 1, 0);
+
+        // Format dates as YYYY-MM-DD for simpler comparison with Supabase DATE / TIMESTAMPTZ columns
+        const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+        const endDate = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
 
         try {
+            // Fetch bills that are:
+            // 1. In the current month (regardless of status)
+            // 2. OR Pending/Overdue from the past (Backlog)
+            // Logic: due_date <= endDate AND (status != 'paid' OR due_date >= startDate)
+
             const { data, error } = await supabase
                 .from('bills')
                 .select('*')
                 .eq('family_id', family.id)
-                .gte('due_date', startDate)
                 .lte('due_date', endDate)
+                .or(`status.neq.paid,due_date.gte.${startDate}`)
                 .order('due_date', { ascending: true });
 
             if (error) throw error;
@@ -73,6 +87,7 @@ export function useBills(selectedMonth: number, selectedYear: number) {
                     dueDate: b.due_date,
                     status: (b.status as "pending" | "paid" | "overdue") || "pending",
                     type: (b.type as "income" | "expense") || "expense",
+                    category: b.category || "Contas", // Default to "Contas" if missing
                     isRecurring: b.is_recurring || false,
                     frequency: b.frequency || "monthly",
                     month: date.getMonth(),
@@ -83,14 +98,19 @@ export function useBills(selectedMonth: number, selectedYear: number) {
             setBills(mappedBills);
         } catch (error) {
             console.error("Error fetching bills:", error);
-            toast({ title: "Erro ao carregar contas", variant: "destructive" });
+            setError(error); // Set error state
+            toast({ title: "Erro ao carregar contas", description: "Verifique os alertas na tela.", variant: "destructive" });
         } finally {
             setLoading(false);
         }
     };
 
-    const addBill = async (bill: Omit<Bill, "id" | "month" | "year" | "status">) => {
-        if (!family?.id) return;
+    const addBill = async (bill: Omit<Bill, "id" | "month" | "year">) => {
+        if (!family?.id) {
+            console.error("Family ID missing in addBill");
+            toast({ title: "Erro", description: "Família não identificada. Tente recarregar a página.", variant: "destructive" });
+            return;
+        }
 
         try {
             const { data, error } = await supabase
@@ -101,9 +121,10 @@ export function useBills(selectedMonth: number, selectedYear: number) {
                     amount: bill.amount,
                     due_date: bill.dueDate,
                     type: bill.type,
+                    category: bill.category,
                     is_recurring: bill.isRecurring,
                     frequency: bill.frequency,
-                    status: "pending"
+                    status: bill.status || "pending"
                 } as any)
                 .select()
                 .single();
@@ -118,6 +139,7 @@ export function useBills(selectedMonth: number, selectedYear: number) {
                 dueDate: newBillData.due_date,
                 status: (newBillData.status as "pending" | "paid" | "overdue") || "pending",
                 type: (newBillData.type as "income" | "expense") || "expense",
+                category: newBillData.category || bill.category || "Contas",
                 isRecurring: newBillData.is_recurring || false,
                 frequency: newBillData.frequency || "monthly",
                 month: new Date(newBillData.due_date).getMonth(),
@@ -136,9 +158,13 @@ export function useBills(selectedMonth: number, selectedYear: number) {
             });
 
             return newBill;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error adding bill:", error);
-            toast({ title: "Erro ao adicionar conta", variant: "destructive" });
+            toast({
+                title: "Erro ao adicionar conta",
+                description: `Detalhes: ${typeof error === "object" ? (error.message || JSON.stringify(error)) : error}`,
+                variant: "destructive"
+            });
         }
     };
 
@@ -181,6 +207,7 @@ export function useBills(selectedMonth: number, selectedYear: number) {
     return {
         bills,
         loading,
+        error, // Return the real error
         addBill,
         toggleBillStatus,
         deleteBill,
