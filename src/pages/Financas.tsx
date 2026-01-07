@@ -1,0 +1,794 @@
+import { useState } from "react";
+import { 
+  Wallet, TrendingUp, TrendingDown, CreditCard, 
+  Calendar, Plus, ArrowUpRight, ArrowDownRight,
+  PiggyBank, Receipt, Filter, Loader2,
+  Target, Sparkles, ChevronLeft, ChevronRight
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
+
+interface Transaction {
+  id: string;
+  description: string;
+  amount: number;
+  type: "income" | "expense";
+  category: string;
+  date: string;
+  icon: string;
+  month: number;
+  year: number;
+}
+
+interface Bill {
+  id: string;
+  description: string;
+  amount: number;
+  dueDate: string;
+  status: "pending" | "paid" | "overdue";
+  month: number;
+  year: number;
+}
+
+const categories = [
+  { name: "Mercado", icon: "🛒", color: "bg-emerald-500/10 text-emerald-600" },
+  { name: "Contas", icon: "📄", color: "bg-blue-500/10 text-blue-600" },
+  { name: "Saúde", icon: "💊", color: "bg-rose-500/10 text-rose-600" },
+  { name: "Transporte", icon: "🚗", color: "bg-amber-500/10 text-amber-600" },
+  { name: "Lazer", icon: "🎬", color: "bg-purple-500/10 text-purple-600" },
+  { name: "Educação", icon: "📚", color: "bg-indigo-500/10 text-indigo-600" },
+  { name: "Renda", icon: "💰", color: "bg-green-500/10 text-green-600" },
+  { name: "Renda Extra", icon: "✨", color: "bg-yellow-500/10 text-yellow-600" },
+  { name: "Outros", icon: "📦", color: "bg-gray-500/10 text-gray-600" },
+];
+
+const monthNames = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+];
+
+const getCategoryConfig = (name: string) => categories.find(c => c.name === name) || categories[8];
+
+const statusConfig = {
+  pending: { label: "Pendente", class: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+  paid: { label: "Pago", class: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" },
+  overdue: { label: "Atrasado", class: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400" },
+};
+
+const Financas = () => {
+  const { toast } = useToast();
+  const currentDate = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
+  const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
+  const [filterType, setFilterType] = useState<"month" | "year">("month");
+  const [activeTab, setActiveTab] = useState<"overview" | "transactions" | "bills">("overview");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [billDialogOpen, setBillDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [transactions, setTransactions] = useState<Transaction[]>([
+    { id: "1", description: "Salário", amount: 8500, type: "income", category: "Renda", date: "2024-01-05", icon: "💰", month: 0, year: 2024 },
+    { id: "2", description: "Supermercado Extra", amount: 456.78, type: "expense", category: "Mercado", date: "2024-01-04", icon: "🛒", month: 0, year: 2024 },
+    { id: "3", description: "Conta de Luz", amount: 245.30, type: "expense", category: "Contas", date: "2024-01-03", icon: "📄", month: 0, year: 2024 },
+    { id: "4", description: "Freelance Design", amount: 1200, type: "income", category: "Renda Extra", date: "2024-01-02", icon: "✨", month: 0, year: 2024 },
+    { id: "5", description: "Farmácia", amount: 89.90, type: "expense", category: "Saúde", date: "2024-01-02", icon: "💊", month: 0, year: 2024 },
+    { id: "6", description: "Uber", amount: 35.50, type: "expense", category: "Transporte", date: "2024-01-01", icon: "🚗", month: 0, year: 2024 },
+    { id: "7", description: "Salário", amount: 8500, type: "income", category: "Renda", date: "2023-12-05", icon: "💰", month: 11, year: 2023 },
+    { id: "8", description: "Presente Natal", amount: 350, type: "expense", category: "Lazer", date: "2023-12-20", icon: "🎬", month: 11, year: 2023 },
+  ]);
+
+  const [bills, setBills] = useState<Bill[]>([
+    { id: "1", description: "Internet Vivo", amount: 129.90, dueDate: "2024-01-10", status: "pending", month: 0, year: 2024 },
+    { id: "2", description: "Água SABESP", amount: 87.45, dueDate: "2024-01-15", status: "pending", month: 0, year: 2024 },
+    { id: "3", description: "Netflix", amount: 55.90, dueDate: "2024-01-08", status: "paid", month: 0, year: 2024 },
+    { id: "4", description: "Condomínio", amount: 650.00, dueDate: "2024-01-05", status: "overdue", month: 0, year: 2024 },
+    { id: "5", description: "Spotify", amount: 21.90, dueDate: "2024-01-20", status: "pending", month: 0, year: 2024 },
+  ]);
+
+  const [newTransaction, setNewTransaction] = useState({
+    description: "",
+    amount: "",
+    type: "expense" as "income" | "expense",
+    category: "Mercado",
+  });
+
+  const [newBill, setNewBill] = useState({
+    description: "",
+    amount: "",
+    dueDate: "",
+  });
+
+  // Filter transactions based on selected period
+  const filteredTransactions = transactions.filter(t => {
+    if (filterType === "month") {
+      return t.month === selectedMonth && t.year === selectedYear;
+    }
+    return t.year === selectedYear;
+  });
+
+  const filteredBills = bills.filter(b => {
+    if (filterType === "month") {
+      return b.month === selectedMonth && b.year === selectedYear;
+    }
+    return b.year === selectedYear;
+  });
+
+  const totalBalance = 12450.00;
+  const monthlyBudget = 5000;
+  const monthlyIncome = filteredTransactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0);
+  const monthlyExpenses = filteredTransactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0);
+  const budgetUsed = monthlyBudget > 0 ? (monthlyExpenses / monthlyBudget) * 100 : 0;
+  const pendingBills = filteredBills.filter(b => b.status === "pending").reduce((acc, b) => acc + b.amount, 0);
+  const overdueBills = filteredBills.filter(b => b.status === "overdue").length;
+
+  const navigatePeriod = (direction: "prev" | "next") => {
+    if (filterType === "month") {
+      if (direction === "prev") {
+        if (selectedMonth === 0) {
+          setSelectedMonth(11);
+          setSelectedYear(selectedYear - 1);
+        } else {
+          setSelectedMonth(selectedMonth - 1);
+        }
+      } else {
+        if (selectedMonth === 11) {
+          setSelectedMonth(0);
+          setSelectedYear(selectedYear + 1);
+        } else {
+          setSelectedMonth(selectedMonth + 1);
+        }
+      }
+    } else {
+      setSelectedYear(direction === "prev" ? selectedYear - 1 : selectedYear + 1);
+    }
+  };
+
+  const handleAddTransaction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTransaction.description || !newTransaction.amount) return;
+
+    setSubmitting(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const categoryConfig = getCategoryConfig(newTransaction.category);
+    const transaction: Transaction = {
+      id: crypto.randomUUID(),
+      description: newTransaction.description,
+      amount: parseFloat(newTransaction.amount),
+      type: newTransaction.type,
+      category: newTransaction.category,
+      date: new Date().toISOString().split("T")[0],
+      icon: categoryConfig.icon,
+      month: selectedMonth,
+      year: selectedYear,
+    };
+
+    setTransactions(prev => [transaction, ...prev]);
+    setNewTransaction({ description: "", amount: "", type: "expense", category: "Mercado" });
+    setDialogOpen(false);
+    setSubmitting(false);
+
+    toast({
+      title: "Transação adicionada!",
+      description: `${transaction.description} - R$ ${transaction.amount.toFixed(2)}`,
+    });
+  };
+
+  const handleAddBill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBill.description || !newBill.amount || !newBill.dueDate) return;
+
+    setSubmitting(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const bill: Bill = {
+      id: crypto.randomUUID(),
+      description: newBill.description,
+      amount: parseFloat(newBill.amount),
+      dueDate: newBill.dueDate,
+      status: "pending",
+      month: selectedMonth,
+      year: selectedYear,
+    };
+
+    setBills(prev => [bill, ...prev]);
+    setNewBill({ description: "", amount: "", dueDate: "" });
+    setBillDialogOpen(false);
+    setSubmitting(false);
+
+    toast({
+      title: "Conta adicionada!",
+      description: `${bill.description} - Vence em ${new Date(bill.dueDate).toLocaleDateString("pt-BR")}`,
+    });
+  };
+
+  const toggleBillStatus = (billId: string) => {
+    setBills(prev => prev.map(bill => {
+      if (bill.id === billId) {
+        const newStatus = bill.status === "paid" ? "pending" : "paid";
+        toast({
+          title: newStatus === "paid" ? "✓ Conta paga!" : "Conta reaberta",
+          description: bill.description,
+        });
+        return { ...bill, status: newStatus };
+      }
+      return bill;
+    }));
+  };
+
+  return (
+    <div className="min-h-screen pb-24 lg:pb-8">
+      {/* Hero Header */}
+      <div className="bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 dark:from-emerald-600 dark:via-teal-600 dark:to-cyan-600">
+        <div className="p-4 lg:p-8 max-w-7xl mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                <Wallet className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="font-display text-2xl lg:text-3xl font-bold text-white">
+                  Finanças
+                </h1>
+                <p className="text-white/80 text-sm">Gestão financeira familiar</p>
+              </div>
+            </div>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2 bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm">
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Nova Transação</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-xl">Nova Transação</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleAddTransaction} className="space-y-5 mt-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setNewTransaction({ ...newTransaction, type: "expense" })}
+                      className={cn(
+                        "p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2",
+                        newTransaction.type === "expense"
+                          ? "border-rose-500 bg-rose-50 dark:bg-rose-950/30"
+                          : "border-border hover:border-rose-300"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-12 h-12 rounded-xl flex items-center justify-center",
+                        newTransaction.type === "expense" ? "bg-rose-500" : "bg-muted"
+                      )}>
+                        <TrendingDown className={cn("w-6 h-6", newTransaction.type === "expense" ? "text-white" : "text-muted-foreground")} />
+                      </div>
+                      <span className={cn("font-medium", newTransaction.type === "expense" ? "text-rose-600" : "text-muted-foreground")}>Despesa</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewTransaction({ ...newTransaction, type: "income" })}
+                      className={cn(
+                        "p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2",
+                        newTransaction.type === "income"
+                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30"
+                          : "border-border hover:border-emerald-300"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-12 h-12 rounded-xl flex items-center justify-center",
+                        newTransaction.type === "income" ? "bg-emerald-500" : "bg-muted"
+                      )}>
+                        <TrendingUp className={cn("w-6 h-6", newTransaction.type === "income" ? "text-white" : "text-muted-foreground")} />
+                      </div>
+                      <span className={cn("font-medium", newTransaction.type === "income" ? "text-emerald-600" : "text-muted-foreground")}>Receita</span>
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Descrição</Label>
+                    <Input
+                      id="description"
+                      value={newTransaction.description}
+                      onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
+                      placeholder="Ex: Supermercado"
+                      className="h-12 rounded-xl"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">Valor (R$)</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newTransaction.amount}
+                      onChange={(e) => setNewTransaction({ ...newTransaction, amount: e.target.value })}
+                      placeholder="0,00"
+                      className="h-12 rounded-xl text-lg font-semibold"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Categoria</Label>
+                    <Select
+                      value={newTransaction.category}
+                      onValueChange={(value) => setNewTransaction({ ...newTransaction, category: value })}
+                    >
+                      <SelectTrigger className="h-12 rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.name} value={cat.name}>
+                            <span className="flex items-center gap-2">
+                              <span>{cat.icon}</span>
+                              <span>{cat.name}</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
+                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Adicionar Transação"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Period Filter */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setFilterType("month")}
+                className={cn(
+                  "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                  filterType === "month" ? "bg-white text-emerald-600" : "bg-white/20 text-white hover:bg-white/30"
+                )}
+              >
+                Mensal
+              </button>
+              <button
+                onClick={() => setFilterType("year")}
+                className={cn(
+                  "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                  filterType === "year" ? "bg-white text-emerald-600" : "bg-white/20 text-white hover:bg-white/30"
+                )}
+              >
+                Anual
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => navigatePeriod("prev")}
+                className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"
+              >
+                <ChevronLeft className="w-4 h-4 text-white" />
+              </button>
+              <span className="text-white font-medium min-w-[120px] text-center">
+                {filterType === "month" ? `${monthNames[selectedMonth]} ${selectedYear}` : selectedYear}
+              </span>
+              <button 
+                onClick={() => navigatePeriod("next")}
+                className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"
+              >
+                <ChevronRight className="w-4 h-4 text-white" />
+              </button>
+            </div>
+          </div>
+
+          {/* Main Balance Card */}
+          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-white/80" />
+              <span className="text-white/80 text-sm">Saldo Total</span>
+            </div>
+            <p className="font-display text-4xl lg:text-5xl font-bold text-white mb-4">
+              R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </p>
+            <div className="flex gap-6">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                  <ArrowUpRight className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-white/60 text-xs">Receitas</p>
+                  <p className="text-white font-semibold">R$ {monthlyIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                  <ArrowDownRight className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-white/60 text-xs">Despesas</p>
+                  <p className="text-white font-semibold">R$ {monthlyExpenses.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 lg:p-8 max-w-7xl mx-auto mt-4">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div className="bg-card rounded-2xl p-4 border border-border shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Target className="w-4 h-4 text-primary" />
+              </div>
+              <span className="text-xs text-muted-foreground">Orçamento</span>
+            </div>
+            <p className="font-display text-lg font-bold text-foreground mb-1">{Math.min(budgetUsed, 100).toFixed(0)}% usado</p>
+            <Progress value={Math.min(budgetUsed, 100)} className="h-1.5" />
+          </div>
+
+          <div className="bg-card rounded-2xl p-4 border border-border shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <Calendar className="w-4 h-4 text-amber-600" />
+              </div>
+              <span className="text-xs text-muted-foreground">Pendentes</span>
+            </div>
+            <p className="font-display text-lg font-bold text-foreground">R$ {pendingBills.toFixed(2)}</p>
+          </div>
+
+          <div className="bg-card rounded-2xl p-4 border border-border shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center">
+                <Receipt className="w-4 h-4 text-rose-600" />
+              </div>
+              <span className="text-xs text-muted-foreground">Atrasadas</span>
+            </div>
+            <p className="font-display text-lg font-bold text-rose-600">{overdueBills}</p>
+          </div>
+
+          <div className="bg-card rounded-2xl p-4 border border-border shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <PiggyBank className="w-4 h-4 text-emerald-600" />
+              </div>
+              <span className="text-xs text-muted-foreground">Economia</span>
+            </div>
+            <p className="font-display text-lg font-bold text-emerald-600">
+              {monthlyIncome > 0 ? `${((monthlyIncome - monthlyExpenses) / monthlyIncome * 100).toFixed(0)}%` : "0%"}
+            </p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+          {[
+            { id: "overview", label: "Resumo", icon: TrendingUp },
+            { id: "transactions", label: "Transações", icon: Receipt },
+            { id: "bills", label: "Contas", icon: Calendar },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              className={cn(
+                "flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all whitespace-nowrap",
+                activeTab === tab.id
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                  : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+              )}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        {activeTab === "overview" && (
+          <div className="grid lg:grid-cols-2 gap-4">
+            {/* Recent Transactions */}
+            <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <h3 className="font-display font-semibold text-foreground">Transações do Período</h3>
+                <button 
+                  onClick={() => setActiveTab("transactions")}
+                  className="text-xs text-primary font-medium hover:underline"
+                >
+                  Ver todas
+                </button>
+              </div>
+              <div className="divide-y divide-border">
+                {filteredTransactions.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    Nenhuma transação neste período
+                  </div>
+                ) : (
+                  filteredTransactions.slice(0, 5).map((tx) => (
+                    <div key={tx.id} className="flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors">
+                      <div className={cn(
+                        "w-11 h-11 rounded-xl flex items-center justify-center text-lg",
+                        getCategoryConfig(tx.category).color
+                      )}>
+                        {tx.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
+                        <p className="text-xs text-muted-foreground">{tx.category}</p>
+                      </div>
+                      <span className={cn(
+                        "text-sm font-bold",
+                        tx.type === "income" ? "text-emerald-600" : "text-foreground"
+                      )}>
+                        {tx.type === "income" ? "+" : "-"} R$ {tx.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Upcoming Bills */}
+            <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <h3 className="font-display font-semibold text-foreground">Contas do Período</h3>
+                <Dialog open={billDialogOpen} onOpenChange={setBillDialogOpen}>
+                  <DialogTrigger asChild>
+                    <button className="text-xs text-primary font-medium hover:underline">
+                      + Adicionar
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="text-xl">Nova Conta</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleAddBill} className="space-y-5 mt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="billDesc">Descrição</Label>
+                        <Input
+                          id="billDesc"
+                          value={newBill.description}
+                          onChange={(e) => setNewBill({ ...newBill, description: e.target.value })}
+                          placeholder="Ex: Internet"
+                          className="h-12 rounded-xl"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="billAmount">Valor (R$)</Label>
+                        <Input
+                          id="billAmount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={newBill.amount}
+                          onChange={(e) => setNewBill({ ...newBill, amount: e.target.value })}
+                          placeholder="0,00"
+                          className="h-12 rounded-xl text-lg font-semibold"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="billDue">Vencimento</Label>
+                        <Input
+                          id="billDue"
+                          type="date"
+                          value={newBill.dueDate}
+                          onChange={(e) => setNewBill({ ...newBill, dueDate: e.target.value })}
+                          className="h-12 rounded-xl"
+                          required
+                        />
+                      </div>
+                      <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
+                        {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Adicionar Conta"}
+                      </Button>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <div className="divide-y divide-border">
+                {filteredBills.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    Nenhuma conta neste período
+                  </div>
+                ) : (
+                  filteredBills.slice(0, 5).map((bill) => (
+                    <div 
+                      key={bill.id} 
+                      className="flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => toggleBillStatus(bill.id)}
+                    >
+                      <div className={cn(
+                        "w-11 h-11 rounded-xl flex items-center justify-center",
+                        bill.status === "paid" ? "bg-emerald-100 dark:bg-emerald-900/30" : 
+                        bill.status === "overdue" ? "bg-rose-100 dark:bg-rose-900/30" : "bg-amber-100 dark:bg-amber-900/30"
+                      )}>
+                        <CreditCard className={cn(
+                          "w-5 h-5",
+                          bill.status === "paid" ? "text-emerald-600" : 
+                          bill.status === "overdue" ? "text-rose-600" : "text-amber-600"
+                        )} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{bill.description}</p>
+                        <p className="text-xs text-muted-foreground">Vence em {new Date(bill.dueDate).toLocaleDateString("pt-BR")}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-bold text-foreground block">
+                          R$ {bill.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </span>
+                        <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", statusConfig[bill.status].class)}>
+                          {statusConfig[bill.status].label}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "transactions" && (
+          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="font-display font-semibold text-foreground">Todas as Transações</h3>
+              <Button variant="outline" size="sm" className="gap-2 rounded-full">
+                <Filter className="w-4 h-4" />
+                Filtrar
+              </Button>
+            </div>
+            <div className="divide-y divide-border">
+              {filteredTransactions.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  Nenhuma transação neste período
+                </div>
+              ) : (
+                filteredTransactions.map((tx) => (
+                  <div key={tx.id} className="flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors">
+                    <div className={cn(
+                      "w-11 h-11 rounded-xl flex items-center justify-center text-lg",
+                      getCategoryConfig(tx.category).color
+                    )}>
+                      {tx.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
+                      <p className="text-xs text-muted-foreground">{tx.category} • {new Date(tx.date).toLocaleDateString("pt-BR")}</p>
+                    </div>
+                    <span className={cn(
+                      "text-sm font-bold",
+                      tx.type === "income" ? "text-emerald-600" : "text-foreground"
+                    )}>
+                      {tx.type === "income" ? "+" : "-"} R$ {tx.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "bills" && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-muted-foreground">Clique em uma conta para marcar como paga</p>
+              <Dialog open={billDialogOpen} onOpenChange={setBillDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-2 rounded-full">
+                    <Plus className="w-4 h-4" />
+                    Nova Conta
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl">Nova Conta</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleAddBill} className="space-y-5 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="billDesc2">Descrição</Label>
+                      <Input
+                        id="billDesc2"
+                        value={newBill.description}
+                        onChange={(e) => setNewBill({ ...newBill, description: e.target.value })}
+                        placeholder="Ex: Internet"
+                        className="h-12 rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="billAmount2">Valor (R$)</Label>
+                      <Input
+                        id="billAmount2"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newBill.amount}
+                        onChange={(e) => setNewBill({ ...newBill, amount: e.target.value })}
+                        placeholder="0,00"
+                        className="h-12 rounded-xl text-lg font-semibold"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="billDue2">Vencimento</Label>
+                      <Input
+                        id="billDue2"
+                        type="date"
+                        value={newBill.dueDate}
+                        onChange={(e) => setNewBill({ ...newBill, dueDate: e.target.value })}
+                        className="h-12 rounded-xl"
+                        required
+                      />
+                    </div>
+                    <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
+                      {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Adicionar Conta"}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredBills.length === 0 ? (
+                <div className="col-span-full p-8 text-center text-muted-foreground bg-card rounded-2xl border border-border">
+                  Nenhuma conta neste período
+                </div>
+              ) : (
+                filteredBills.map((bill) => (
+                  <div 
+                    key={bill.id} 
+                    onClick={() => toggleBillStatus(bill.id)}
+                    className={cn(
+                      "bg-card rounded-2xl border-2 p-4 cursor-pointer transition-all hover:shadow-md",
+                      bill.status === "paid" ? "border-emerald-200 dark:border-emerald-800" : 
+                      bill.status === "overdue" ? "border-rose-200 dark:border-rose-800" : "border-border"
+                    )}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center",
+                        bill.status === "paid" ? "bg-emerald-100 dark:bg-emerald-900/30" : 
+                        bill.status === "overdue" ? "bg-rose-100 dark:bg-rose-900/30" : "bg-amber-100 dark:bg-amber-900/30"
+                      )}>
+                        <CreditCard className={cn(
+                          "w-5 h-5",
+                          bill.status === "paid" ? "text-emerald-600" : 
+                          bill.status === "overdue" ? "text-rose-600" : "text-amber-600"
+                        )} />
+                      </div>
+                      <span className={cn("text-xs px-2 py-1 rounded-full font-medium", statusConfig[bill.status].class)}>
+                        {statusConfig[bill.status].label}
+                      </span>
+                    </div>
+                    <h4 className="font-semibold text-foreground mb-1">{bill.description}</h4>
+                    <p className="text-xs text-muted-foreground mb-2">Vence em {new Date(bill.dueDate).toLocaleDateString("pt-BR")}</p>
+                    <p className="font-display text-xl font-bold text-foreground">
+                      R$ {bill.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Financas;

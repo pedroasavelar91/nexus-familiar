@@ -1,0 +1,223 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@layer base {
+  :root {
+    --background: 220 14% 96%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 90%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 160 84% 39%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 220 13% 87%;
+    --input: 220 13% 87%;
+    --ring: 239 84% 67%;
+
+    --radius: 0.75rem;
+
+    /* Custom tokens */
+    --finance: 160 84% 39%;
+    --finance-foreground: 0 0% 100%;
+    --finance-muted: 160 40% 94%;
+    
+    --productivity: 239 84% 67%;
+    --productivity-foreground: 0 0% 100%;
+    --productivity-muted: 239 40% 95%;
+    
+    --health: 340 75% 55%;
+    --health-foreground: 0 0% 100%;
+    --health-muted: 340 40% 95%;
+    
+    --inventory: 32 95% 55%;
+    --inventory-foreground: 0 0% 100%;
+    --inventory-muted: 32 50% 95%;
+
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 220 14% 90%;
+    --sidebar-primary: 239 84% 67%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 40% 18%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 222 30% 20%;
+    --sidebar-ring: 239 84% 67%;
+
+    /* Gradients */
+    --gradient-finance: linear-gradient(135deg, hsl(160 84% 39%), hsl(160 70% 50%));
+    --gradient-productivity: linear-gradient(135deg, hsl(239 84% 67%), hsl(260 70% 60%));
+    --gradient-health: linear-gradient(135deg, hsl(340 75% 55%), hsl(350 65% 60%));
+    --gradient-inventory: linear-gradient(135deg, hsl(32 95% 55%), hsl(45 90% 55%));
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 220 14% 96%;
+
+    --card: 222 47% 9%;
+    --card-foreground: 220 14% 96%;
+
+    --popover: 222 47% 9%;
+    --popover-foreground: 220 14% 96%;
+
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 40% 15%;
+    --secondary-foreground: 220 14% 96%;
+
+    --muted: 222 40% 15%;
+    --muted-foreground: 220 9% 60%;
+
+    --accent: 160 84% 39%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 222 30% 18%;
+    --input: 222 30% 18%;
+    --ring: 239 84% 67%;
+
+    --finance-muted: 160 30% 15%;
+    --productivity-muted: 239 30% 15%;
+    --health-muted: 340 30% 15%;
+    --inventory-muted: 32 30% 15%;
+
+    --sidebar-background: 222 50% 5%;
+    --sidebar-foreground: 220 14% 90%;
+    --sidebar-primary: 239 84% 67%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 40% 12%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 222 30% 15%;
+    --sidebar-ring: 239 84% 67%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .bento-card {
+    @apply rounded-2xl border border-border bg-card p-5 shadow-sm transition-all duration-300 hover:shadow-md hover:border-primary/20;
+  }
+
+  .bento-card-finance {
+    @apply bento-card border-l-4 border-l-accent hover:border-l-accent;
+  }
+
+  .bento-card-productivity {
+    @apply bento-card border-l-4 border-l-primary hover:border-l-primary;
+  }
+
+  .bento-card-health {
+    @apply bento-card border-l-4 border-l-[hsl(var(--health))] hover:border-l-[hsl(var(--health))];
+  }
+
+  .bento-card-inventory {
+    @apply bento-card border-l-4 border-l-[hsl(var(--inventory))] hover:border-l-[hsl(var(--inventory))];
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+  }
+
+  .gradient-finance {
+    background: var(--gradient-finance);
+  }
+
+  .gradient-productivity {
+    background: var(--gradient-productivity);
+  }
+
+  .gradient-health {
+    background: var(--gradient-health);
+  }
+
+  .gradient-inventory {
+    background: var(--gradient-inventory);
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .status-pending {
+    @apply bg-[hsl(var(--inventory-muted))] text-[hsl(var(--inventory))];
+  }
+
+  .status-paid {
+    @apply bg-[hsl(var(--finance-muted))] text-[hsl(var(--accent))];
+  }
+
+  .status-overdue {
+    @apply bg-destructive/10 text-destructive;
+  }
+
+  .stock-low {
+    @apply bg-destructive/10 text-destructive;
+  }
+
+  .stock-medium {
+    @apply bg-[hsl(var(--inventory-muted))] text-[hsl(var(--inventory))];
+  }
+
+  .stock-full {
+    @apply bg-[hsl(var(--finance-muted))] text-[hsl(var(--accent))];
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
