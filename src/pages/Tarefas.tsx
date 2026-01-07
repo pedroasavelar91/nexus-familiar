@@ -34,6 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 import { useTasks, Task } from "@/hooks/useTasks";
+import { useFamily } from "@/hooks/useFamily";
 
 const priorityConfig = {
   high: { label: "Alta", color: "text-rose-600", bg: "bg-rose-100 dark:bg-rose-900/30", dot: "bg-rose-500" },
@@ -54,6 +55,7 @@ const ITEMS_PER_PAGE = 10;
 const Tarefas = () => {
   const { toast } = useToast();
   const { tasks, loading, addTask, toggleTask, deleteTask } = useTasks();
+  const { isAdmin } = useFamily();
 
   const [activeTab, setActiveTab] = useState<"today" | "all">("today");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed">("all");
@@ -132,102 +134,104 @@ const Tarefas = () => {
                 <p className="text-white/80 text-sm">Motor de rotina familiar</p>
               </div>
             </div>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2 bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm">
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Nova Tarefa</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="text-xl">Nova Tarefa</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleAddTask} className="space-y-5 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="taskTitle">O que precisa ser feito?</Label>
-                    <Input
-                      id="taskTitle"
-                      value={newTask.title}
-                      onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                      placeholder="Ex: Comprar leite"
-                      className="h-12 rounded-xl"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Responsável</Label>
-                      <Select
-                        value={newTask.assignee}
-                        onValueChange={(value) => setNewTask({ ...newTask, assignee: value })}
-                      >
-                        <SelectTrigger className="h-12 rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {assignees.map((a) => (
-                            <SelectItem key={a} value={a}>
-                              <span className="flex items-center gap-2">
-                                <span className={cn("w-2 h-2 rounded-full", assigneeColors[a])} />
-                                {a}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Prioridade</Label>
-                      <Select
-                        value={newTask.priority}
-                        onValueChange={(value: "high" | "medium" | "low") => setNewTask({ ...newTask, priority: value })}
-                      >
-                        <SelectTrigger className="h-12 rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(priorityConfig).map(([key, config]) => (
-                            <SelectItem key={key} value={key}>
-                              <span className="flex items-center gap-2">
-                                <span className={cn("w-2 h-2 rounded-full", config.dot)} />
-                                {config.label}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="dueDate">Data</Label>
-                    <Input
-                      id="dueDate"
-                      type="date"
-                      value={newTask.dueDate}
-                      onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                      className="h-12 rounded-xl"
-                      required
-                    />
-                  </div>
-                  <label className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={newTask.recurring}
-                      onChange={(e) => setNewTask({ ...newTask, recurring: e.target.checked })}
-                      className="w-5 h-5 rounded-lg"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Repeat className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium">Tarefa recorrente</span>
-                    </div>
-                  </label>
-                  <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
-                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Criar Tarefa"}
+            {isAdmin && (
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2 bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm">
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Nova Tarefa</span>
                   </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl">Nova Tarefa</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleAddTask} className="space-y-5 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="taskTitle">O que precisa ser feito?</Label>
+                      <Input
+                        id="taskTitle"
+                        value={newTask.title}
+                        onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                        placeholder="Ex: Comprar leite"
+                        className="h-12 rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Responsável</Label>
+                        <Select
+                          value={newTask.assignee}
+                          onValueChange={(value) => setNewTask({ ...newTask, assignee: value })}
+                        >
+                          <SelectTrigger className="h-12 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {assignees.map((a) => (
+                              <SelectItem key={a} value={a}>
+                                <span className="flex items-center gap-2">
+                                  <span className={cn("w-2 h-2 rounded-full", assigneeColors[a])} />
+                                  {a}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Prioridade</Label>
+                        <Select
+                          value={newTask.priority}
+                          onValueChange={(value: "high" | "medium" | "low") => setNewTask({ ...newTask, priority: value })}
+                        >
+                          <SelectTrigger className="h-12 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(priorityConfig).map(([key, config]) => (
+                              <SelectItem key={key} value={key}>
+                                <span className="flex items-center gap-2">
+                                  <span className={cn("w-2 h-2 rounded-full", config.dot)} />
+                                  {config.label}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dueDate">Data</Label>
+                      <Input
+                        id="dueDate"
+                        type="date"
+                        value={newTask.dueDate}
+                        onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                        className="h-12 rounded-xl"
+                        required
+                      />
+                    </div>
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newTask.recurring}
+                        onChange={(e) => setNewTask({ ...newTask, recurring: e.target.checked })}
+                        className="w-5 h-5 rounded-lg"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Repeat className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-medium">Tarefa recorrente</span>
+                      </div>
+                    </label>
+                    <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
+                      {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Criar Tarefa"}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
 
           {/* Progress Card */}
@@ -383,12 +387,14 @@ const Tarefas = () => {
                     </span>
                   </div>
                 </div>
-                <button
-                  onClick={() => deleteTask(task.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-destructive/10 rounded-lg"
-                >
-                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => deleteTask(task.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-destructive/10 rounded-lg"
+                  >
+                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

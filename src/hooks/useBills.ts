@@ -9,8 +9,25 @@ export interface Bill {
     amount: number;
     dueDate: string;
     status: "pending" | "paid" | "overdue";
+    type: "income" | "expense";
+    isRecurring: boolean;
+    frequency: string;
     month: number;
     year: number;
+}
+
+// Helper type for DB response
+interface BillRow {
+    id: string;
+    description: string;
+    amount: number;
+    due_date: string;
+    status: string;
+    type: string;
+    is_recurring: boolean;
+    frequency: string;
+    family_id: string;
+    created_at: string;
 }
 
 export function useBills(selectedMonth: number, selectedYear: number) {
@@ -46,7 +63,8 @@ export function useBills(selectedMonth: number, selectedYear: number) {
 
             if (error) throw error;
 
-            const mappedBills: Bill[] = data.map(b => {
+            // Cast data to any first to avoid type errors with new columns if types aren't generated
+            const mappedBills: Bill[] = (data as any[]).map(b => {
                 const date = new Date(b.due_date);
                 return {
                     id: b.id,
@@ -54,6 +72,9 @@ export function useBills(selectedMonth: number, selectedYear: number) {
                     amount: b.amount,
                     dueDate: b.due_date,
                     status: (b.status as "pending" | "paid" | "overdue") || "pending",
+                    type: (b.type as "income" | "expense") || "expense",
+                    isRecurring: b.is_recurring || false,
+                    frequency: b.frequency || "monthly",
                     month: date.getMonth(),
                     year: date.getFullYear()
                 };
@@ -79,21 +100,28 @@ export function useBills(selectedMonth: number, selectedYear: number) {
                     description: bill.description,
                     amount: bill.amount,
                     due_date: bill.dueDate,
+                    type: bill.type,
+                    is_recurring: bill.isRecurring,
+                    frequency: bill.frequency,
                     status: "pending"
-                })
+                } as any)
                 .select()
                 .single();
 
             if (error) throw error;
 
+            const newBillData = data as any;
             const newBill: Bill = {
-                id: data.id,
-                description: data.description,
-                amount: data.amount,
-                dueDate: data.due_date,
-                status: (data.status as "pending" | "paid" | "overdue") || "pending",
-                month: new Date(data.due_date).getMonth(),
-                year: new Date(data.due_date).getFullYear()
+                id: newBillData.id,
+                description: newBillData.description,
+                amount: newBillData.amount,
+                dueDate: newBillData.due_date,
+                status: (newBillData.status as "pending" | "paid" | "overdue") || "pending",
+                type: (newBillData.type as "income" | "expense") || "expense",
+                isRecurring: newBillData.is_recurring || false,
+                frequency: newBillData.frequency || "monthly",
+                month: new Date(newBillData.due_date).getMonth(),
+                year: new Date(newBillData.due_date).getFullYear()
             };
 
             // Update local state if it matches current view

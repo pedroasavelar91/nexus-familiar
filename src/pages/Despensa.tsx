@@ -34,6 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { usePantry, PantryItem } from "@/hooks/usePantry";
 import { useShoppingList } from "@/hooks/useShoppingList";
+import { useFamily } from "@/hooks/useFamily";
 
 interface Category {
   id: string;
@@ -76,6 +77,7 @@ const Despensa = () => {
   const { toast } = useToast();
   const { items, addItem, updateItem, deleteItem } = usePantry();
   const { addItem: addToShoppingListStore } = useShoppingList();
+  const { isAdmin } = useFamily();
 
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -168,103 +170,105 @@ const Despensa = () => {
                 <p className="text-white/80 text-sm">Controle de alimentos e itens</p>
               </div>
             </div>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2 bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm">
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Adicionar</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="text-xl">Adicionar Item</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleAddItem} className="space-y-5 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="itemName">Nome do Item</Label>
-                    <Input
-                      id="itemName"
-                      value={newItem.name}
-                      onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                      placeholder="Ex: Leite Integral"
-                      className="h-12 rounded-xl"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+            {isAdmin && (
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2 bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm">
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Adicionar</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl">Adicionar Item</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleAddItem} className="space-y-5 mt-4">
                     <div className="space-y-2">
-                      <Label>Categoria</Label>
-                      <Select
-                        value={newItem.category}
-                        onValueChange={(value) => setNewItem({ ...newItem, category: value })}
-                      >
-                        <SelectTrigger className="h-12 rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              <div className="flex items-center gap-2">
-                                <cat.icon className={cn("w-4 h-4", cat.color)} />
-                                {cat.name}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Unidade</Label>
-                      <Select
-                        value={newItem.unit}
-                        onValueChange={(value) => setNewItem({ ...newItem, unit: value })}
-                      >
-                        <SelectTrigger className="h-12 rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {units.map((u) => (
-                            <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="currentAmount">Quantidade Atual</Label>
+                      <Label htmlFor="itemName">Nome do Item</Label>
                       <Input
-                        id="currentAmount"
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        value={newItem.currentAmount}
-                        onChange={(e) => setNewItem({ ...newItem, currentAmount: e.target.value })}
-                        placeholder="0"
-                        className="h-12 rounded-xl"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="idealAmount">Quantidade Ideal</Label>
-                      <Input
-                        id="idealAmount"
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        value={newItem.idealAmount}
-                        onChange={(e) => setNewItem({ ...newItem, idealAmount: e.target.value })}
-                        placeholder="Ex: 5"
+                        id="itemName"
+                        value={newItem.name}
+                        onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                        placeholder="Ex: Leite Integral"
                         className="h-12 rounded-xl"
                         required
                       />
                     </div>
-                  </div>
-                  <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
-                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Adicionar Item"}
-                  </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Categoria</Label>
+                        <Select
+                          value={newItem.category}
+                          onValueChange={(value) => setNewItem({ ...newItem, category: value })}
+                        >
+                          <SelectTrigger className="h-12 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id}>
+                                <div className="flex items-center gap-2">
+                                  <cat.icon className={cn("w-4 h-4", cat.color)} />
+                                  {cat.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Unidade</Label>
+                        <Select
+                          value={newItem.unit}
+                          onValueChange={(value) => setNewItem({ ...newItem, unit: value })}
+                        >
+                          <SelectTrigger className="h-12 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {units.map((u) => (
+                              <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="currentAmount">Quantidade Atual</Label>
+                        <Input
+                          id="currentAmount"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={newItem.currentAmount}
+                          onChange={(e) => setNewItem({ ...newItem, currentAmount: e.target.value })}
+                          placeholder="0"
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="idealAmount">Quantidade Ideal</Label>
+                        <Input
+                          id="idealAmount"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={newItem.idealAmount}
+                          onChange={(e) => setNewItem({ ...newItem, idealAmount: e.target.value })}
+                          placeholder="Ex: 5"
+                          className="h-12 rounded-xl"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
+                      {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Adicionar Item"}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
 
           {/* Stats Card */}
@@ -389,24 +393,26 @@ const Despensa = () => {
                   <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center", category.bgColor)}>
                     <category.icon className={cn("w-5 h-5", category.color)} />
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {(status.status === "low" || status.status === "empty") && (
+                  {isAdmin && (
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {(status.status === "low" || status.status === "empty") && (
+                        <button
+                          onClick={() => handleAddToShoppingList(item)}
+                          className="p-2 rounded-lg hover:bg-muted transition-colors"
+                          title="Adicionar à lista de compras"
+                        >
+                          <ShoppingCart className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleAddToShoppingList(item)}
+                        onClick={() => deleteItem(item.id)}
                         className="p-2 rounded-lg hover:bg-muted transition-colors"
-                        title="Adicionar à lista de compras"
+                        title="Remover item"
                       >
-                        <ShoppingCart className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                        <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                       </button>
-                    )}
-                    <button
-                      onClick={() => deleteItem(item.id)}
-                      className="p-2 rounded-lg hover:bg-muted transition-colors"
-                      title="Remover item"
-                    >
-                      <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 <h3 className="font-semibold text-foreground mb-1">{item.name}</h3>
@@ -433,21 +439,23 @@ const Despensa = () => {
                     />
                   </div>
                   {/* Quick amount buttons */}
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      onClick={() => updateItem(item.id, { currentAmount: Math.max(0, item.currentAmount - 1) })}
-                      className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground hover:bg-muted/80 font-bold"
-                    >
-                      -
-                    </button>
-                    <span className="text-sm font-medium text-foreground">{item.currentAmount} {item.unit}</span>
-                    <button
-                      onClick={() => updateItem(item.id, { currentAmount: item.currentAmount + 1 })}
-                      className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground hover:bg-muted/80 font-bold"
-                    >
-                      +
-                    </button>
-                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center justify-between pt-2">
+                      <button
+                        onClick={() => updateItem(item.id, { currentAmount: Math.max(0, item.currentAmount - 1) })}
+                        className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground hover:bg-muted/80 font-bold"
+                      >
+                        -
+                      </button>
+                      <span className="text-sm font-medium text-foreground">{item.currentAmount} {item.unit}</span>
+                      <button
+                        onClick={() => updateItem(item.id, { currentAmount: item.currentAmount + 1 })}
+                        className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground hover:bg-muted/80 font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );

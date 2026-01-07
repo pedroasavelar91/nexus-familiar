@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { 
+import {
   Users, UserPlus, Copy, Check,
   Mail, Phone, Edit2, Trash2, Clock,
   Crown, User, Dog, Loader2, UserCheck, UserX,
@@ -41,7 +41,7 @@ const avatarColors = [
 ];
 
 const Membros = () => {
-  const { family, members, joinRequests, loading, addMember, removeMember, approveRequest, rejectRequest } = useFamily();
+  const { family, members, joinRequests, loading, addMember, removeMember, updateMember, approveRequest, rejectRequest, isAdmin } = useFamily();
   const { toast } = useToast();
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -53,6 +53,7 @@ const Membros = () => {
     phone: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [updatingRole, setUpdatingRole] = useState<string | null>(null);
 
   const admins = members.filter((m) => m.role === "admin");
   const regularMembers = members.filter((m) => m.role === "member");
@@ -114,6 +115,26 @@ const Membros = () => {
     }
   };
 
+  const handleRoleChange = async (memberId: string, newRole: "admin" | "member") => {
+    setUpdatingRole(memberId);
+    try {
+      await updateMember(memberId, { role: newRole });
+      toast({
+        title: "Função atualizada",
+        description: "A função do membro foi alterada com sucesso.",
+      });
+    } catch (error: any) {
+      console.error("Role update error:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível atualizar a função. Verifique as permissões.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingRole(null);
+    }
+  };
+
   const handleApproveRequest = async (requestId: string, userName: string) => {
     try {
       await approveRequest(requestId);
@@ -171,84 +192,7 @@ const Membros = () => {
                 <p className="text-white/80 text-sm">Gestão familiar e acessos</p>
               </div>
             </div>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2 bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm">
-                  <UserPlus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Adicionar</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="text-xl">Adicionar Membro</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleAddMember} className="space-y-5 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nome</Label>
-                    <Input
-                      id="name"
-                      value={newMember.name}
-                      onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
-                      placeholder="Nome do membro"
-                      className="h-12 rounded-xl"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tipo</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(["admin", "member", "pet"] as const).map((role) => {
-                        const config = roleConfig[role];
-                        return (
-                          <button
-                            key={role}
-                            type="button"
-                            onClick={() => setNewMember({ ...newMember, role })}
-                            className={cn(
-                              "p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1",
-                              newMember.role === role
-                                ? "border-primary bg-primary/10"
-                                : "border-border hover:border-primary/50"
-                            )}
-                          >
-                            <config.icon className={cn("w-5 h-5", config.color)} />
-                            <span className="text-xs font-medium">{config.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  {newMember.role !== "pet" && (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email (opcional)</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={newMember.email}
-                          onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
-                          placeholder="email@exemplo.com"
-                          className="h-12 rounded-xl"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="phone">Telefone (opcional)</Label>
-                        <Input
-                          id="phone"
-                          value={newMember.phone}
-                          onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
-                          placeholder="(11) 99999-9999"
-                          className="h-12 rounded-xl"
-                        />
-                      </div>
-                    </>
-                  )}
-                  <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
-                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Adicionar Membro"}
-                  </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+            {/* Add Button REMOVED from Header as requested */}
           </div>
 
           {/* Stats Card */}
@@ -314,7 +258,7 @@ const Membros = () => {
         )}
 
         {/* Pending Requests */}
-        {joinRequests.length > 0 && (
+        {joinRequests.length > 0 && isAdmin && (
           <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-4">
               <Clock className="w-5 h-5 text-amber-600" />
@@ -363,8 +307,9 @@ const Membros = () => {
           {/* Members List */}
           <div className="lg:col-span-2">
             <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-border">
+              <div className="p-4 border-b border-border flex items-center justify-between">
                 <h3 className="font-display font-semibold text-foreground">Todos os Membros</h3>
+                {/* Add button removed */}
               </div>
               {members.length === 0 ? (
                 <div className="text-center py-12">
@@ -427,19 +372,21 @@ const Membros = () => {
               <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-display font-semibold text-foreground">Detalhes</h3>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" className="rounded-full">
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive rounded-full"
-                      onClick={() => handleRemoveMember(selected)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                  {isAdmin && (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="rounded-full">
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive rounded-full"
+                        onClick={() => handleRemoveMember(selected)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-center mb-6">
@@ -461,6 +408,43 @@ const Membros = () => {
                     {React.createElement(roleConfig[selected.role].icon, { className: "w-4 h-4" })}
                     {roleConfig[selected.role].label}
                   </span>
+
+                  {isAdmin && selected.role !== "pet" && (
+                    <div className="mt-4 flex gap-2 justify-center">
+                      {selected.role === "member" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRoleChange(selected.id, "admin")}
+                          disabled={updatingRole === selected.id}
+                          className="text-violet-600 border-violet-200 hover:bg-violet-50"
+                        >
+                          {updatingRole === selected.id ? (
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          ) : (
+                            <Crown className="w-3 h-3 mr-1" />
+                          )}
+                          Promover a Admin
+                        </Button>
+                      )}
+                      {selected.role === "admin" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRoleChange(selected.id, "member")}
+                          disabled={updatingRole === selected.id}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          {updatingRole === selected.id ? (
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          ) : (
+                            <User className="w-3 h-3 mr-1" />
+                          )}
+                          Tornar Membro
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-3">

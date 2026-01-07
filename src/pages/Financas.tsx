@@ -102,19 +102,23 @@ const Financas = () => {
     amount: "",
     type: "expense" as "income" | "expense",
     category: "Mercado",
-  });
-
-  const [newBill, setNewBill] = useState({
-    description: "",
-    amount: "",
+    status: "paid" as "paid" | "pending",
     dueDate: "",
+    date: new Date().toISOString().split("T")[0],
+    isRecurring: false,
+    frequency: "monthly"
   });
 
   const [newAsset, setNewAsset] = useState({
     name: "",
     amount: "",
+    initialAmount: "",
     type: "investment" as "investment" | "savings",
+    startDate: new Date().toISOString().split("T")[0],
+    maturityDate: ""
   });
+
+
 
 
   // Calculate totals from fetched data
@@ -159,37 +163,41 @@ const Financas = () => {
 
     setSubmitting(true);
 
-    // Get icon for category
-    const categoryConfig = getCategoryConfig(newTransaction.category);
+    if (newTransaction.status === "pending") {
+      // Add as Bill
+      await addBill({
+        description: newTransaction.description,
+        amount: parseFloat(newTransaction.amount),
+        dueDate: newTransaction.dueDate || newTransaction.date,
+        type: newTransaction.type,
+        isRecurring: newTransaction.isRecurring,
+        frequency: newTransaction.frequency
+      });
+    } else {
+      // Add as Transaction
+      const categoryConfig = getCategoryConfig(newTransaction.category);
+      await addTransaction({
+        description: newTransaction.description,
+        amount: parseFloat(newTransaction.amount),
+        type: newTransaction.type,
+        category: newTransaction.category,
+        date: newTransaction.date,
+        icon: categoryConfig.icon
+      });
+    }
 
-    await addTransaction({
-      description: newTransaction.description,
-      amount: parseFloat(newTransaction.amount),
-      type: newTransaction.type,
-      category: newTransaction.category,
-      date: new Date().toISOString().split("T")[0], // Default to today or let user choose? Mock used today.
-      icon: categoryConfig.icon
+    setNewTransaction({
+      description: "",
+      amount: "",
+      type: "expense",
+      category: "Mercado",
+      status: "paid",
+      dueDate: "",
+      date: new Date().toISOString().split("T")[0],
+      isRecurring: false,
+      frequency: "monthly"
     });
-
-    setNewTransaction({ description: "", amount: "", type: "expense", category: "Mercado" });
     setDialogOpen(false);
-    setSubmitting(false);
-  };
-
-  const handleAddBill = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newBill.description || !newBill.amount || !newBill.dueDate) return;
-
-    setSubmitting(true);
-
-    await addBill({
-      description: newBill.description,
-      amount: parseFloat(newBill.amount),
-      dueDate: newBill.dueDate
-    });
-
-    setNewBill({ description: "", amount: "", dueDate: "" });
-    setBillDialogOpen(false);
     setSubmitting(false);
   };
 
@@ -202,11 +210,21 @@ const Financas = () => {
     await addAsset({
       name: newAsset.name,
       amount: parseFloat(newAsset.amount),
+      initialAmount: parseFloat(newAsset.initialAmount) || parseFloat(newAsset.amount),
       type: newAsset.type,
+      startDate: newAsset.startDate,
+      maturityDate: newAsset.maturityDate || undefined,
       color: newAsset.type === "investment" ? "bg-purple-500" : "bg-emerald-500"
     });
 
-    setNewAsset({ name: "", amount: "", type: "investment" });
+    setNewAsset({
+      name: "",
+      amount: "",
+      initialAmount: "",
+      type: "investment",
+      startDate: new Date().toISOString().split("T")[0],
+      maturityDate: ""
+    });
     setAssetDialogOpen(false);
     setSubmitting(false);
   };
@@ -239,11 +257,40 @@ const Financas = () => {
                   <span className="hidden sm:inline">Nova Transação</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
+              <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle className="text-xl">Nova Transação</DialogTitle>
+                  <DialogTitle className="text-xl">Nova Transação / Conta</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleAddTransaction} className="space-y-5 mt-4">
+
+                  {/* Status Toggle (Pago / Agendado) */}
+                  <div className="bg-muted/50 p-1 rounded-xl flex">
+                    <button
+                      type="button"
+                      onClick={() => setNewTransaction({ ...newTransaction, status: "paid" })}
+                      className={cn(
+                        "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
+                        newTransaction.status === "paid"
+                          ? "bg-white shadow text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Pago (Agora)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewTransaction({ ...newTransaction, status: "pending" })}
+                      className={cn(
+                        "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
+                        newTransaction.status === "pending"
+                          ? "bg-white shadow text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Agendado (Futuro)
+                    </button>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
@@ -282,17 +329,19 @@ const Financas = () => {
                       <span className={cn("font-medium", newTransaction.type === "income" ? "text-emerald-600" : "text-muted-foreground")}>Receita</span>
                     </button>
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="description">Descrição</Label>
                     <Input
                       id="description"
                       value={newTransaction.description}
                       onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
-                      placeholder="Ex: Supermercado"
+                      placeholder={newTransaction.status === "pending" ? "Ex: Aluguel, Internet" : "Ex: Supermercado"}
                       className="h-12 rounded-xl"
                       required
                     />
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="amount">Valor (R$)</Label>
                     <Input
@@ -307,29 +356,74 @@ const Financas = () => {
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Categoria</Label>
-                    <Select
-                      value={newTransaction.category}
-                      onValueChange={(value) => setNewTransaction({ ...newTransaction, category: value })}
-                    >
-                      <SelectTrigger className="h-12 rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((cat) => (
-                          <SelectItem key={cat.name} value={cat.name}>
-                            <span className="flex items-center gap-2">
-                              <span>{cat.icon}</span>
-                              <span>{cat.name}</span>
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+
+                  {newTransaction.status === "paid" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="date">Data</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={newTransaction.date}
+                        onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
+                        className="h-12 rounded-xl"
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {newTransaction.status === "pending" && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="dueDate">Data de Vencimento</Label>
+                        <Input
+                          id="dueDate"
+                          type="date"
+                          value={newTransaction.dueDate}
+                          onChange={(e) => setNewTransaction({ ...newTransaction, dueDate: e.target.value })}
+                          className="h-12 rounded-xl"
+                          required
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="isRecurring"
+                          checked={newTransaction.isRecurring}
+                          onChange={(e) => setNewTransaction({ ...newTransaction, isRecurring: e.target.checked })}
+                          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <Label htmlFor="isRecurring" className="cursor-pointer">Recorrência Mensal</Label>
+                      </div>
+                    </>
+                  )}
+
+                  {newTransaction.status === "paid" && (
+                    <div className="space-y-2">
+                      <Label>Categoria</Label>
+                      <Select
+                        value={newTransaction.category}
+                        onValueChange={(value) => setNewTransaction({ ...newTransaction, category: value })}
+                      >
+                        <SelectTrigger className="h-12 rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat.name} value={cat.name}>
+                              <span className="flex items-center gap-2">
+                                <span>{cat.icon}</span>
+                                <span>{cat.name}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
-                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Adicionar Transação"}
+                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar"}
                   </Button>
                 </form>
               </DialogContent>
@@ -529,59 +623,15 @@ const Financas = () => {
             <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <h3 className="font-display font-semibold text-foreground">Contas do Período</h3>
-                <Dialog open={billDialogOpen} onOpenChange={setBillDialogOpen}>
-                  <DialogTrigger asChild>
-                    <button className="text-xs text-primary font-medium hover:underline">
-                      + Adicionar
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle className="text-xl">Nova Conta</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleAddBill} className="space-y-5 mt-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="billDesc">Descrição</Label>
-                        <Input
-                          id="billDesc"
-                          value={newBill.description}
-                          onChange={(e) => setNewBill({ ...newBill, description: e.target.value })}
-                          placeholder="Ex: Internet"
-                          className="h-12 rounded-xl"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="billAmount">Valor (R$)</Label>
-                        <Input
-                          id="billAmount"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={newBill.amount}
-                          onChange={(e) => setNewBill({ ...newBill, amount: e.target.value })}
-                          placeholder="0,00"
-                          className="h-12 rounded-xl text-lg font-semibold"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="billDue">Vencimento</Label>
-                        <Input
-                          id="billDue"
-                          type="date"
-                          value={newBill.dueDate}
-                          onChange={(e) => setNewBill({ ...newBill, dueDate: e.target.value })}
-                          className="h-12 rounded-xl"
-                          required
-                        />
-                      </div>
-                      <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
-                        {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Adicionar Conta"}
-                      </Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
+                <button
+                  onClick={() => {
+                    setNewTransaction({ ...newTransaction, status: "pending" });
+                    setDialogOpen(true);
+                  }}
+                  className="text-xs text-primary font-medium hover:underline"
+                >
+                  + Adicionar
+                </button>
               </div>
               <div className="divide-y divide-border">
                 {bills.length === 0 ? (
@@ -670,60 +720,17 @@ const Financas = () => {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <p className="text-sm text-muted-foreground">Clique em uma conta para marcar como paga</p>
-              <Dialog open={billDialogOpen} onOpenChange={setBillDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gap-2 rounded-full">
-                    <Plus className="w-4 h-4" />
-                    Nova Conta
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle className="text-xl">Nova Conta</DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={handleAddBill} className="space-y-5 mt-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="billDesc2">Descrição</Label>
-                      <Input
-                        id="billDesc2"
-                        value={newBill.description}
-                        onChange={(e) => setNewBill({ ...newBill, description: e.target.value })}
-                        placeholder="Ex: Internet"
-                        className="h-12 rounded-xl"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="billAmount2">Valor (R$)</Label>
-                      <Input
-                        id="billAmount2"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={newBill.amount}
-                        onChange={(e) => setNewBill({ ...newBill, amount: e.target.value })}
-                        placeholder="0,00"
-                        className="h-12 rounded-xl text-lg font-semibold"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="billDue2">Vencimento</Label>
-                      <Input
-                        id="billDue2"
-                        type="date"
-                        value={newBill.dueDate}
-                        onChange={(e) => setNewBill({ ...newBill, dueDate: e.target.value })}
-                        className="h-12 rounded-xl"
-                        required
-                      />
-                    </div>
-                    <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
-                      {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Adicionar Conta"}
-                    </Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              <Button
+                size="sm"
+                className="gap-2 rounded-full"
+                onClick={() => {
+                  setNewTransaction({ ...newTransaction, status: "pending" });
+                  setDialogOpen(true);
+                }}
+              >
+                <Plus className="w-4 h-4" />
+                Nova Conta
+              </Button>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {bills.length === 0 ? (
@@ -783,7 +790,7 @@ const Financas = () => {
                     Novo Ativo
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="text-xl">Novo Ativo</DialogTitle>
                   </DialogHeader>
@@ -828,19 +835,59 @@ const Financas = () => {
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="assetAmount">Valor Atual (R$)</Label>
-                      <Input
-                        id="assetAmount"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={newAsset.amount}
-                        onChange={(e) => setNewAsset({ ...newAsset, amount: e.target.value })}
-                        placeholder="0,00"
-                        className="h-12 rounded-xl text-lg font-semibold"
-                        required
-                      />
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="assetInitial">Valor Inicial (R$)</Label>
+                        <Input
+                          id="assetInitial"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={newAsset.initialAmount}
+                          onChange={(e) => setNewAsset({ ...newAsset, initialAmount: e.target.value })}
+                          placeholder="0,00"
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="assetAmount">Valor Atual (R$)</Label>
+                        <Input
+                          id="assetAmount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={newAsset.amount}
+                          onChange={(e) => setNewAsset({ ...newAsset, amount: e.target.value })}
+                          placeholder="0,00"
+                          className="h-12 rounded-xl font-semibold"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="assetStart">Data Início</Label>
+                        <Input
+                          id="assetStart"
+                          type="date"
+                          value={newAsset.startDate}
+                          onChange={(e) => setNewAsset({ ...newAsset, startDate: e.target.value })}
+                          className="h-12 rounded-xl"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="assetMaturity">Vencimento (Opcional)</Label>
+                        <Input
+                          id="assetMaturity"
+                          type="date"
+                          value={newAsset.maturityDate}
+                          onChange={(e) => setNewAsset({ ...newAsset, maturityDate: e.target.value })}
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
                     </div>
                     <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={submitting}>
                       {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Ativo"}

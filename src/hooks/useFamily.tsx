@@ -110,7 +110,7 @@ export function useFamily() {
         } else {
           setHasFamily(false);
         }
-        
+
         setFamily(null);
         setMembers([]);
       }
@@ -326,5 +326,7 @@ export function useFamily() {
     updateMember,
     removeMember,
     refetch,
+    currentMember: members.find((m) => m.user_id === user?.id),
+    isAdmin: members.find((m) => m.user_id === user?.id)?.role === "admin",
   };
 }

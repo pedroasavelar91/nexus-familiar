@@ -7,7 +7,10 @@ export interface Asset {
     id: string;
     name: string;
     amount: number;
+    initialAmount: number;
     type: "investment" | "savings";
+    startDate: string;
+    maturityDate?: string;
     color?: string;
 }
 
@@ -38,12 +41,15 @@ export function useInvestments() {
 
             if (error) throw error;
 
-            // Type validation/cast
-            const mappedAssets: Asset[] = data.map(item => ({
+            // Type validation/cast - casting to any[] to handle new columns not in auto-generated types
+            const mappedAssets: Asset[] = (data as any[]).map(item => ({
                 id: item.id,
                 name: item.name,
                 amount: item.amount,
+                initialAmount: item.initial_amount || item.amount,
                 type: item.type as "investment" | "savings",
+                startDate: item.start_date || new Date().toISOString().split("T")[0],
+                maturityDate: item.maturity_date,
                 color: item.color || undefined
             }));
 
@@ -66,20 +72,27 @@ export function useInvestments() {
                     family_id: family.id,
                     name: asset.name,
                     amount: asset.amount,
+                    initial_amount: asset.initialAmount,
                     type: asset.type,
+                    start_date: asset.startDate,
+                    maturity_date: asset.maturityDate,
                     color: asset.color
-                })
+                } as any)
                 .select()
                 .single();
 
             if (error) throw error;
 
+            const newAssetData = data as any;
             const newAsset: Asset = {
-                id: data.id,
-                name: data.name,
-                amount: data.amount,
-                type: data.type as "investment" | "savings",
-                color: data.color || undefined
+                id: newAssetData.id,
+                name: newAssetData.name,
+                amount: newAssetData.amount,
+                initialAmount: newAssetData.initial_amount,
+                type: newAssetData.type as "investment" | "savings",
+                startDate: newAssetData.start_date,
+                maturityDate: newAssetData.maturity_date,
+                color: newAssetData.color || undefined
             };
 
             setAssets((prev) => [...prev, newAsset]);
