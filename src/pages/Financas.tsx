@@ -224,8 +224,7 @@ const Financas = () => {
   const monthlyExpenses = monthlyTransactionExpenses + allBillsAmount;
   const totalBalance = monthlyIncome - monthlyExpenses;
 
-  const monthlyBudget = 5000;
-  const budgetUsed = monthlyBudget > 0 ? (monthlyExpenses / monthlyBudget) * 100 : 0;
+
 
   const pendingBills = bills.filter(b => b.status === "pending").reduce((acc, b) => acc + b.amount, 0);
   const overdueBillsCount = bills.filter(b => b.status === "overdue").length;
@@ -677,17 +676,8 @@ const Financas = () => {
 
       <div className="p-4 lg:p-8 max-w-7xl mx-auto mt-4">
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <div className="bg-card rounded-2xl p-4 border border-border shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Target className="w-4 h-4 text-primary" />
-              </div>
-              <span className="text-xs text-muted-foreground">Orçamento</span>
-            </div>
-            <p className="font-display text-lg font-bold text-foreground mb-1">{Math.min(budgetUsed, 100).toFixed(0)}% usado</p>
-            <Progress value={Math.min(budgetUsed, 100)} className="h-1.5" />
-          </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+
 
           <div className="bg-card rounded-2xl p-4 border border-border shadow-sm">
             <div className="flex items-center gap-2 mb-2">
