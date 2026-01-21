@@ -1124,4 +1124,4 @@ const FinancasPessoais = () => {
   );
 };
 
-export default Financas;
+export default FinancasPessoais;
