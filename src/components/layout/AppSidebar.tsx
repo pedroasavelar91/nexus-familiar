@@ -6,6 +6,7 @@ import { useState } from "react";
 const menuItems = [
   { icon: Home, label: "Dashboard", path: "/" },
   { icon: Wallet, label: "Finanças", path: "/financas" },
+  { icon: Wallet, label: "Pessoal", path: "/financas-pessoais" },
   { icon: ShoppingBasket, label: "Despensa", path: "/despensa" },
   { icon: ShoppingCart, label: "Lista", path: "/lista-compras" },
   { icon: CheckSquare, label: "Tarefas", path: "/tarefas" },

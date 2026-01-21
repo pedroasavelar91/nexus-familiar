@@ -95,22 +95,25 @@ import { useInvestments } from "@/hooks/useInvestments";
 
 // ... (keep categories, monthNames, getCategoryConfig, statusConfig)
 
-const Financas = () => {
+const FinancasPessoais = () => {
   const { toast } = useToast();
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [filterType, setFilterType] = useState<"month" | "year" | "total">("month");
-  const [activeTab, setActiveTab] = useState<"overview" | "transactions" | "bills" | "investments">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "transactions">("overview");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [billDialogOpen, setBillDialogOpen] = useState(false);
-  const [assetDialogOpen, setAssetDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Hooks for data fetching
-  const { transactions, loading: loadingTransactions, addTransaction, editTransaction, deleteTransaction } = useTransactions(selectedMonth, selectedYear, filterType);
-  const { bills, loading: loadingBills, error: billsError, addBill, toggleBillStatus, deleteBill } = useBills(selectedMonth, selectedYear, filterType);
-  const { assets, loading: loadingAssets, addAsset, deleteAsset } = useInvestments();
+  // Hooks for data fetching - Personal Scope
+  const { transactions, loading: loadingTransactions, addTransaction, editTransaction, deleteTransaction } = useTransactions(selectedMonth, selectedYear, filterType, 'personal');
+
+  // We won't use bills/assets for now, or we can assume they are shared. 
+  // For a purely personal page, let's stick to transactions first or we'd need to update other hooks.
+  // To keep it clean, I'll just show Transactions and Overview.
+  const bills: Bill[] = [];
+  const loadingBills = false;
+  const assets: any[] = [];
 
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'transaction' | 'bill' | 'asset' | 'bulk_transactions', id?: string } | null>(null);
@@ -138,13 +141,7 @@ const Financas = () => {
 
     if (type === 'transaction' && id) {
       await deleteTransaction(id);
-    } else if (type === 'bill' && id) {
-      await deleteBill(id);
-    } else if (type === 'asset' && id) {
-      await deleteAsset(id);
     } else if (type === 'bulk_transactions') {
-      // Bulk delete
-      // Note: For efficiency, a bulk delete API would be better, but loop is acceptable for now.
       for (const txId of selectedTransactions) {
         await deleteTransaction(txId);
       }
@@ -153,7 +150,7 @@ const Financas = () => {
 
     setDeleteConfirmation(null);
   };
-
+  // ... (helper functions toggleSelection, toggleAllSelection remain similar)
   const toggleSelection = (id: string) => {
     setSelectedTransactions(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
@@ -180,15 +177,6 @@ const Financas = () => {
     frequency: "monthly"
   });
 
-  const [newAsset, setNewAsset] = useState({
-    name: "",
-    amount: "R$ 0,00",
-    initialAmount: "R$ 0,00",
-    type: "investment" as "investment" | "savings",
-    startDate: new Date().toISOString().split("T")[0],
-    maturityDate: ""
-  });
-
   const formatCurrencyInput = (value: string) => {
     const numbers = value.replace(/\D/g, "");
     const amount = parseFloat(numbers) / 100;
@@ -206,56 +194,34 @@ const Financas = () => {
 
   const formatDateToPTBR = (dateString: string) => {
     if (!dateString) return "";
-    // Handle both ISO strings (timestamptz) and YYYY-MM-DD (date)
     const cleanDate = dateString.split("T")[0];
     const [year, month, day] = cleanDate.split("-");
-
-    // Create local date at noon to prevent timezone rollovers
     const date = new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0);
     return date.toLocaleDateString("pt-BR");
   };
 
-
-
-
   // Calculate totals from fetched data
   const monthlyIncome = transactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0);
   const monthlyTransactionExpenses = transactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0);
-  const allBillsAmount = bills.reduce((acc, b) => acc + b.amount, 0); // Include all bills (paid, pending, overdue)
-  const monthlyExpenses = monthlyTransactionExpenses + allBillsAmount;
+  const monthlyExpenses = monthlyTransactionExpenses; // No bills in personal view for now
   const totalBalance = monthlyIncome - monthlyExpenses;
 
-
-
-  const pendingBills = bills.filter(b => b.status === "pending").reduce((acc, b) => acc + b.amount, 0);
-  const overdueBillsCount = bills.filter(b => b.status === "overdue").length;
-  const overdueBillsAmount = bills.filter(b => b.status === "overdue").reduce((acc, b) => acc + b.amount, 0);
-
-  const totalInvested = assets.reduce((acc, a) => acc + a.amount, 0);
-
-  // Calculate chart data
+  // Chart Data
   const chartData = categories.map(cat => {
     const txAmount = transactions
       .filter(t => t.type === 'expense' && t.category === cat.name)
       .reduce((acc, t) => acc + t.amount, 0);
 
-    // Bills are effectively future expenses or paid expenses
-    const billAmount = bills
-      .filter(b => b.type === 'expense' && b.category === cat.name)
-      .reduce((acc, b) => acc + b.amount, 0);
-
     return {
       name: cat.name,
-      value: txAmount + billAmount,
-      color: cat.color.split(' ')[1].replace('text-', 'bg-') // Extract generic color class or use mapping
+      value: txAmount,
+      color: cat.color.split(' ')[1].replace('text-', 'bg-')
     };
   })
     .filter(item => item.value > 0)
     .sort((a, b) => b.value - a.value);
 
-  // Map tailwind classes to hex for Recharts (approximate for now or use specific hex map)
   const COLORS = ['#10b981', '#3b82f6', '#f43f5e', '#f59e0b', '#8b5cf6', '#6366f1', '#06b6d4', '#22c55e', '#eab308', '#6b7280'];
-
 
   const navigatePeriod = (direction: "prev" | "next") => {
     if (filterType === "month") {
@@ -285,38 +251,22 @@ const Financas = () => {
 
     setSubmitting(true);
 
-    const isBill = newTransaction.status !== "paid" || newTransaction.isRecurring;
+    // Only Transactions for Personal Page
+    const categoryConfig = getCategoryConfig(newTransaction.category);
+    const transactionData = {
+      description: newTransaction.description,
+      amount: parseCurrencyInput(newTransaction.amount),
+      type: newTransaction.type,
+      category: newTransaction.category,
+      date: newTransaction.date,
+      icon: categoryConfig.icon
+    };
 
-    if (isBill) {
-      // Add as Bill
-      await addBill({
-        description: newTransaction.description,
-        amount: parseCurrencyInput(newTransaction.amount),
-        dueDate: newTransaction.date, // Use the main date field
-        type: newTransaction.type,
-        category: newTransaction.category,
-        isRecurring: newTransaction.isRecurring,
-        frequency: newTransaction.frequency,
-        status: newTransaction.status
-      });
+    if (editingTransaction) {
+      await editTransaction(editingTransaction, transactionData);
+      toast({ title: "Transação atualizada com sucesso!" });
     } else {
-      // Add or Edit Transaction
-      const categoryConfig = getCategoryConfig(newTransaction.category);
-      const transactionData = {
-        description: newTransaction.description,
-        amount: parseCurrencyInput(newTransaction.amount),
-        type: newTransaction.type,
-        category: newTransaction.category,
-        date: newTransaction.date,
-        icon: categoryConfig.icon
-      };
-
-      if (editingTransaction) {
-        await editTransaction(editingTransaction, transactionData);
-        toast({ title: "Transação atualizada com sucesso!" });
-      } else {
-        await addTransaction(transactionData);
-      }
+      await addTransaction(transactionData);
     }
 
     setNewTransaction({
@@ -342,7 +292,7 @@ const Financas = () => {
       amount: tx.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
       type: tx.type,
       category: tx.category,
-      status: "paid", // Transactions don't have status, default to paid
+      status: "paid",
       dueDate: "",
       date: tx.date.split("T")[0],
       isRecurring: false,
@@ -351,42 +301,10 @@ const Financas = () => {
     setDialogOpen(true);
   };
 
-  const handleAddAsset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAsset.name || !newAsset.amount) return;
-
-    setSubmitting(true);
-
-    await addAsset({
-      name: newAsset.name,
-      amount: parseCurrencyInput(newAsset.amount),
-      initialAmount: parseCurrencyInput(newAsset.initialAmount) || parseCurrencyInput(newAsset.amount),
-      type: newAsset.type,
-      startDate: newAsset.startDate,
-      maturityDate: newAsset.maturityDate || undefined,
-      color: newAsset.type === "investment" ? "bg-purple-500" : "bg-emerald-500"
-    });
-
-    setNewAsset({
-      name: "",
-      amount: "R$ 0,00",
-      initialAmount: "R$ 0,00",
-      type: "investment",
-      startDate: new Date().toISOString().split("T")[0],
-      maturityDate: ""
-    });
-    setAssetDialogOpen(false);
-    setSubmitting(false);
-  };
-
-  // Note: filteredTransactions and filteredBills logic is now handled by the hook based on selectedMonth/Year arguments passed to it.
-  // We can just use 'transactions' and 'bills' directly.
-
-
   return (
     <div className="min-h-screen pb-24 lg:pb-8">
       {/* Hero Header */}
-      <div className="bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 dark:from-emerald-600 dark:via-teal-600 dark:to-cyan-600">
+      <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500">
         <div className="p-4 lg:p-8 max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -395,9 +313,9 @@ const Financas = () => {
               </div>
               <div>
                 <h1 className="font-display text-2xl lg:text-3xl font-bold text-white">
-                  Finanças
+                  Finanças Pessoais
                 </h1>
-                <p className="text-white/80 text-sm">Gestão financeira familiar</p>
+                <p className="text-white/80 text-sm">Gestão financeira individual</p>
               </div>
             </div>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

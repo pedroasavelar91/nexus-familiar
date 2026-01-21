@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import FamilySetup from "./pages/FamilySetup";
 import Financas from "./pages/Financas";
+import FinancasPessoais from "./pages/FinancasPessoais";
 import Despensa from "./pages/Despensa";
 import Tarefas from "./pages/Tarefas";
 import Alimentacao from "./pages/Alimentacao";
@@ -131,6 +132,7 @@ const App = () => {
                     <Routes>
                       <Route path="/" element={<Index />} />
                       <Route path="/financas" element={<Financas />} />
+                      <Route path="/financas-pessoais" element={<FinancasPessoais />} />
                       <Route path="/despensa" element={<Despensa />} />
                       <Route path="/lista-compras" element={<ListaCompras />} />
                       <Route path="/tarefas" element={<Tarefas />} />

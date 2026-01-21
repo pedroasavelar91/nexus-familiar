@@ -16,23 +16,30 @@ export interface Transaction {
     year: number;
 }
 
-export function useTransactions(selectedMonth: number, selectedYear: number, filterMode: 'month' | 'year' | 'total' = 'month') {
+export function useTransactions(
+    selectedMonth: number,
+    selectedYear: number,
+    filterMode: 'month' | 'year' | 'total' = 'month',
+    scope: 'family' | 'personal' = 'family'
+) {
     const { family } = useFamily();
     const { user } = useAuth();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (family?.id) {
+        if (user?.id && (scope === 'personal' || family?.id)) {
             fetchTransactions();
         } else {
             setTransactions([]);
             setLoading(false);
         }
-    }, [family?.id, selectedMonth, selectedYear, filterMode]);
+    }, [family?.id, user?.id, selectedMonth, selectedYear, filterMode, scope]);
 
     const fetchTransactions = async () => {
-        if (!family?.id) return;
+        if (!user?.id) return;
+        if (scope === 'family' && !family?.id) return;
+
         setLoading(true);
 
         // Calculate start and end date
@@ -51,13 +58,20 @@ export function useTransactions(selectedMonth: number, selectedYear: number, fil
         }
 
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('transactions')
                 .select('*')
-                .eq('family_id', family.id)
                 .gte('date', startDate)
                 .lte('date', endDate)
                 .order('date', { ascending: false });
+
+            if (scope === 'personal') {
+                query = query.eq('created_by', user.id);
+            } else {
+                query = query.eq('family_id', family!.id);
+            }
+
+            const { data, error } = await query;
 
             if (error) throw error;
 
@@ -87,13 +101,14 @@ export function useTransactions(selectedMonth: number, selectedYear: number, fil
     };
 
     const addTransaction = async (transaction: Omit<Transaction, "id" | "month" | "year">) => {
-        if (!family?.id || !user?.id) return;
+        if (!user?.id) return;
+        if (scope === 'family' && !family?.id) return;
 
         try {
             const { data, error } = await supabase
                 .from('transactions')
                 .insert({
-                    family_id: family.id,
+                    family_id: scope === 'family' ? family!.id : null, // Optional for personal
                     description: transaction.description,
                     amount: transaction.amount,
                     type: transaction.type,
@@ -119,13 +134,11 @@ export function useTransactions(selectedMonth: number, selectedYear: number, fil
                 year: new Date(data.date).getFullYear()
             };
 
-            // Checking if the new transaction fits the current filter
-            // Since we might be in 'total' or 'year' mode, we need to be broader
+            // Update local state if it matches filters
             const txDate = new Date(newTx.date);
             const matchesMonth = txDate.getMonth() === selectedMonth && txDate.getFullYear() === selectedYear;
             const matchesYear = txDate.getFullYear() === selectedYear;
 
-            // Update if strict month match OR if in year mode and year matches OR if in total mode
             if (
                 filterMode === 'total' ||
                 (filterMode === 'year' && matchesYear) ||
@@ -146,6 +159,50 @@ export function useTransactions(selectedMonth: number, selectedYear: number, fil
         }
     };
 
+    const editTransaction = async (id: string, updates: Partial<Omit<Transaction, "id" | "month" | "year">>) => {
+        try {
+            const { data, error } = await supabase
+                .from('transactions')
+                .update({
+                    description: updates.description,
+                    amount: updates.amount,
+                    type: updates.type,
+                    category: updates.category,
+                    date: updates.date,
+                    icon: updates.icon
+                })
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            const updatedTx: Transaction = {
+                id: data.id,
+                description: data.description,
+                amount: data.amount,
+                type: (data.type as "income" | "expense") || "expense",
+                category: data.category,
+                date: data.date,
+                icon: data.icon,
+                month: new Date(data.date).getMonth(),
+                year: new Date(data.date).getFullYear()
+            };
+
+            setTransactions(prev => prev.map(t => t.id === id ? updatedTx : t));
+
+            // Check if updated date still matches filter, if not remove it? 
+            // For simplicity, we just update it in place. If date changed out of range, 
+            // user might see it disappear next refresh or if we implement strict filter check here.
+
+            toast({ title: "Transação atualizada!" });
+            return updatedTx;
+        } catch (error) {
+            console.error("Error updating transaction:", error);
+            toast({ title: "Erro ao atualizar transação", variant: "destructive" });
+        }
+    };
+
     const deleteTransaction = async (id: string) => {
         try {
             const { error } = await supabase.from('transactions').delete().eq('id', id);
@@ -162,6 +219,7 @@ export function useTransactions(selectedMonth: number, selectedYear: number, fil
         transactions,
         loading,
         addTransaction,
+        editTransaction,
         deleteTransaction,
         refetch: fetchTransactions
     };
