@@ -16,7 +16,7 @@ export interface Transaction {
     year: number;
 }
 
-export function useTransactions(selectedMonth: number, selectedYear: number) {
+export function useTransactions(selectedMonth: number, selectedYear: number, filterMode: 'month' | 'year' | 'total' = 'month') {
     const { family } = useFamily();
     const { user } = useAuth();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -29,15 +29,26 @@ export function useTransactions(selectedMonth: number, selectedYear: number) {
             setTransactions([]);
             setLoading(false);
         }
-    }, [family?.id, selectedMonth, selectedYear]);
+    }, [family?.id, selectedMonth, selectedYear, filterMode]);
 
     const fetchTransactions = async () => {
         if (!family?.id) return;
         setLoading(true);
 
-        // Calculate start and end date of the month
-        const startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
-        const endDate = new Date(selectedYear, selectedMonth + 1, 0).toISOString();
+        // Calculate start and end date
+        let startDate: string;
+        let endDate: string;
+
+        if (filterMode === 'total') {
+            startDate = "1970-01-01T00:00:00.000Z";
+            endDate = "2100-12-31T23:59:59.999Z";
+        } else if (filterMode === 'year') {
+            startDate = new Date(selectedYear, 0, 1).toISOString();
+            endDate = new Date(selectedYear, 11, 31, 23, 59, 59).toISOString();
+        } else {
+            startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
+            endDate = new Date(selectedYear, selectedMonth + 1, 0).toISOString();
+        }
 
         try {
             const { data, error } = await supabase
@@ -108,9 +119,18 @@ export function useTransactions(selectedMonth: number, selectedYear: number) {
                 year: new Date(data.date).getFullYear()
             };
 
-            // Only update local state if it belongs to current view
+            // Checking if the new transaction fits the current filter
+            // Since we might be in 'total' or 'year' mode, we need to be broader
             const txDate = new Date(newTx.date);
-            if (txDate.getMonth() === selectedMonth && txDate.getFullYear() === selectedYear) {
+            const matchesMonth = txDate.getMonth() === selectedMonth && txDate.getFullYear() === selectedYear;
+            const matchesYear = txDate.getFullYear() === selectedYear;
+
+            // Update if strict month match OR if in year mode and year matches OR if in total mode
+            if (
+                filterMode === 'total' ||
+                (filterMode === 'year' && matchesYear) ||
+                (filterMode === 'month' && matchesMonth)
+            ) {
                 setTransactions(prev => [newTx, ...prev]);
             }
 

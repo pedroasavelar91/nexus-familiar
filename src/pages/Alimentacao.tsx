@@ -42,6 +42,7 @@ import { format, addDays, startOfWeek, isSameDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFamily } from "@/hooks/useFamily";
+import { PaginationControl } from "@/components/PaginationControl";
 
 interface MealType {
   id: string;
@@ -610,27 +611,11 @@ const Alimentacao = () => {
             </div>
 
             {totalPages > 1 && (
-              <div className="flex justify-center mt-8 gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <div className="flex items-center px-4 text-sm font-medium">
-                  Página {currentPage} de {totalPages}
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
+              <PaginationControl
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
             )}
           </TabsContent>
         </Tabs>

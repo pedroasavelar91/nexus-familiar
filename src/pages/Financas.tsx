@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Wallet, TrendingUp, TrendingDown, CreditCard,
   Calendar, Plus, ArrowUpRight, ArrowDownRight,
   PiggyBank, Receipt, Filter, Loader2,
   Target, Sparkles, ChevronLeft, ChevronRight,
-  Trash2, Ban
+  Trash2, Ban, PieChart as PieChartIcon, CheckSquare
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +38,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
+import { PaginationControl } from "@/components/PaginationControl";
 
 interface Transaction {
   id: string;
@@ -69,6 +72,7 @@ const categories = [
   { name: "Assinaturas", icon: "🔄", color: "bg-cyan-500/10 text-cyan-600" },
   { name: "Renda", icon: "💰", color: "bg-green-500/10 text-green-600" },
   { name: "Renda Extra", icon: "✨", color: "bg-yellow-500/10 text-yellow-600" },
+  { name: "Empréstimo", icon: "🤝", color: "bg-orange-500/10 text-orange-600" },
   { name: "Outros", icon: "📦", color: "bg-gray-500/10 text-gray-600" },
 ];
 
@@ -96,7 +100,7 @@ const Financas = () => {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
-  const [filterType, setFilterType] = useState<"month" | "year">("month");
+  const [filterType, setFilterType] = useState<"month" | "year" | "total">("month");
   const [activeTab, setActiveTab] = useState<"overview" | "transactions" | "bills" | "investments">("overview");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [billDialogOpen, setBillDialogOpen] = useState(false);
@@ -104,31 +108,68 @@ const Financas = () => {
   const [submitting, setSubmitting] = useState(false);
 
   // Hooks for data fetching
-  const { transactions, loading: loadingTransactions, addTransaction, deleteTransaction } = useTransactions(selectedMonth, selectedYear);
-  const { bills, loading: loadingBills, error: billsError, addBill, toggleBillStatus, deleteBill } = useBills(selectedMonth, selectedYear);
+  const { transactions, loading: loadingTransactions, addTransaction, deleteTransaction } = useTransactions(selectedMonth, selectedYear, filterType);
+  const { bills, loading: loadingBills, error: billsError, addBill, toggleBillStatus, deleteBill } = useBills(selectedMonth, selectedYear, filterType);
   const { assets, loading: loadingAssets, addAsset, deleteAsset } = useInvestments();
 
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'transaction' | 'bill' | 'asset', id: string } | null>(null);
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'transaction' | 'bill' | 'asset' | 'bulk_transactions', id?: string } | null>(null);
+
+  // Pagination for Transactions
+  const ITEMS_PER_PAGE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedMonth, selectedYear, filterType]);
+
+  const totalPages = Math.ceil(transactions.length / ITEMS_PER_PAGE);
+  const paginatedTransactions = transactions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const confirmDelete = async () => {
     if (!deleteConfirmation) return;
 
     const { type, id } = deleteConfirmation;
 
-    if (type === 'transaction') {
+    if (type === 'transaction' && id) {
       await deleteTransaction(id);
-    } else if (type === 'bill') {
+    } else if (type === 'bill' && id) {
       await deleteBill(id);
-    } else if (type === 'asset') {
+    } else if (type === 'asset' && id) {
       await deleteAsset(id);
+    } else if (type === 'bulk_transactions') {
+      // Bulk delete
+      // Note: For efficiency, a bulk delete API would be better, but loop is acceptable for now.
+      for (const txId of selectedTransactions) {
+        await deleteTransaction(txId);
+      }
+      setSelectedTransactions([]);
     }
 
     setDeleteConfirmation(null);
   };
 
+  const toggleSelection = (id: string) => {
+    setSelectedTransactions(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedTransactions.length === transactions.length) {
+      setSelectedTransactions([]);
+    } else {
+      setSelectedTransactions(transactions.map(t => t.id));
+    }
+  };
+
   const [newTransaction, setNewTransaction] = useState({
     description: "",
-    amount: "",
+    amount: "R$ 0,00",
     type: "expense" as "income" | "expense",
     category: "Mercado",
     status: "paid" as "paid" | "pending" | "overdue",
@@ -140,28 +181,80 @@ const Financas = () => {
 
   const [newAsset, setNewAsset] = useState({
     name: "",
-    amount: "",
-    initialAmount: "",
+    amount: "R$ 0,00",
+    initialAmount: "R$ 0,00",
     type: "investment" as "investment" | "savings",
     startDate: new Date().toISOString().split("T")[0],
     maturityDate: ""
   });
+
+  const formatCurrencyInput = (value: string) => {
+    const numbers = value.replace(/\D/g, "");
+    const amount = parseFloat(numbers) / 100;
+    return amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  };
+
+  const parseCurrencyInput = (value: string) => {
+    return parseFloat(value.replace(/[^0-9,-]+/g, "").replace(",", ".")) || 0;
+  };
+
+  const handleCurrencyChange = (value: string, setter: any, field: string, obj: any) => {
+    const formatted = formatCurrencyInput(value);
+    setter({ ...obj, [field]: formatted });
+  };
+
+  const formatDateToPTBR = (dateString: string) => {
+    if (!dateString) return "";
+    // Handle both ISO strings (timestamptz) and YYYY-MM-DD (date)
+    const cleanDate = dateString.split("T")[0];
+    const [year, month, day] = cleanDate.split("-");
+
+    // Create local date at noon to prevent timezone rollovers
+    const date = new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0);
+    return date.toLocaleDateString("pt-BR");
+  };
 
 
 
 
   // Calculate totals from fetched data
   const monthlyIncome = transactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0);
-  const monthlyExpenses = transactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0);
-  const totalBalance = monthlyIncome - monthlyExpenses; // Simplified balance calculation for now (or fetch global balance if needed)
+  const monthlyTransactionExpenses = transactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0);
+  const allBillsAmount = bills.reduce((acc, b) => acc + b.amount, 0); // Include all bills (paid, pending, overdue)
+  const monthlyExpenses = monthlyTransactionExpenses + allBillsAmount;
+  const totalBalance = monthlyIncome - monthlyExpenses;
 
   const monthlyBudget = 5000;
   const budgetUsed = monthlyBudget > 0 ? (monthlyExpenses / monthlyBudget) * 100 : 0;
 
   const pendingBills = bills.filter(b => b.status === "pending").reduce((acc, b) => acc + b.amount, 0);
-  const overdueBills = bills.filter(b => b.status === "overdue").length;
+  const overdueBillsCount = bills.filter(b => b.status === "overdue").length;
+  const overdueBillsAmount = bills.filter(b => b.status === "overdue").reduce((acc, b) => acc + b.amount, 0);
 
   const totalInvested = assets.reduce((acc, a) => acc + a.amount, 0);
+
+  // Calculate chart data
+  const chartData = categories.map(cat => {
+    const txAmount = transactions
+      .filter(t => t.type === 'expense' && t.category === cat.name)
+      .reduce((acc, t) => acc + t.amount, 0);
+
+    // Bills are effectively future expenses or paid expenses
+    const billAmount = bills
+      .filter(b => b.type === 'expense' && b.category === cat.name)
+      .reduce((acc, b) => acc + b.amount, 0);
+
+    return {
+      name: cat.name,
+      value: txAmount + billAmount,
+      color: cat.color.split(' ')[1].replace('text-', 'bg-') // Extract generic color class or use mapping
+    };
+  })
+    .filter(item => item.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  // Map tailwind classes to hex for Recharts (approximate for now or use specific hex map)
+  const COLORS = ['#10b981', '#3b82f6', '#f43f5e', '#f59e0b', '#8b5cf6', '#6366f1', '#06b6d4', '#22c55e', '#eab308', '#6b7280'];
 
 
   const navigatePeriod = (direction: "prev" | "next") => {
@@ -198,7 +291,7 @@ const Financas = () => {
       // Add as Bill
       await addBill({
         description: newTransaction.description,
-        amount: parseFloat(newTransaction.amount),
+        amount: parseCurrencyInput(newTransaction.amount),
         dueDate: newTransaction.date, // Use the main date field
         type: newTransaction.type,
         category: newTransaction.category,
@@ -211,7 +304,7 @@ const Financas = () => {
       const categoryConfig = getCategoryConfig(newTransaction.category);
       await addTransaction({
         description: newTransaction.description,
-        amount: parseFloat(newTransaction.amount),
+        amount: parseCurrencyInput(newTransaction.amount),
         type: newTransaction.type,
         category: newTransaction.category,
         date: newTransaction.date,
@@ -221,7 +314,7 @@ const Financas = () => {
 
     setNewTransaction({
       description: "",
-      amount: "",
+      amount: "R$ 0,00",
       type: "expense",
       category: "Mercado",
       status: "paid",
@@ -242,8 +335,8 @@ const Financas = () => {
 
     await addAsset({
       name: newAsset.name,
-      amount: parseFloat(newAsset.amount),
-      initialAmount: parseFloat(newAsset.initialAmount) || parseFloat(newAsset.amount),
+      amount: parseCurrencyInput(newAsset.amount),
+      initialAmount: parseCurrencyInput(newAsset.initialAmount) || parseCurrencyInput(newAsset.amount),
       type: newAsset.type,
       startDate: newAsset.startDate,
       maturityDate: newAsset.maturityDate || undefined,
@@ -252,8 +345,8 @@ const Financas = () => {
 
     setNewAsset({
       name: "",
-      amount: "",
-      initialAmount: "",
+      amount: "R$ 0,00",
+      initialAmount: "R$ 0,00",
       type: "investment",
       startDate: new Date().toISOString().split("T")[0],
       maturityDate: ""
@@ -352,12 +445,9 @@ const Financas = () => {
                     <Label htmlFor="amount">Valor (R$)</Label>
                     <Input
                       id="amount"
-                      type="number"
-                      step="0.01"
-                      min="0"
                       value={newTransaction.amount}
-                      onChange={(e) => setNewTransaction({ ...newTransaction, amount: e.target.value })}
-                      placeholder="0,00"
+                      onChange={(e) => handleCurrencyChange(e.target.value, setNewTransaction, "amount", newTransaction)}
+                      placeholder="R$ 0,00"
                       className="h-12 rounded-xl text-lg font-semibold"
                       required
                     />
@@ -451,104 +541,134 @@ const Financas = () => {
             </Dialog>
           </div>
 
-          {/* Period Filter */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setFilterType("month")}
-                className={cn(
-                  "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                  filterType === "month" ? "bg-white text-emerald-600" : "bg-white/20 text-white hover:bg-white/30"
-                )}
-              >
-                Mensal
-              </button>
-              <button
-                onClick={() => setFilterType("year")}
-                className={cn(
-                  "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                  filterType === "year" ? "bg-white text-emerald-600" : "bg-white/20 text-white hover:bg-white/30"
-                )}
-              >
-                Anual
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigatePeriod("prev")}
-                className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"
-              >
-                <ChevronLeft className="w-4 h-4 text-white" />
-              </button>
-              <span className="text-white font-medium min-w-[120px] text-center">
-                {filterType === "month" ? `${monthNames[selectedMonth]} ${selectedYear}` : selectedYear}
-              </span>
-              <button
-                onClick={() => navigatePeriod("next")}
-                className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"
-              >
-                <ChevronRight className="w-4 h-4 text-white" />
-              </button>
-            </div>
-          </div>
+          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 md:p-8">
+            {/* Filters & Navigation */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+              <div className="bg-white/10 backdrop-blur-md p-1 rounded-xl inline-flex">
+                <button
+                  onClick={() => setFilterType("month")}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                    filterType === "month" ? "bg-white text-emerald-600 shadow-sm" : "text-white hover:bg-white/10"
+                  )}
+                >
+                  Mensal
+                </button>
+                <button
+                  onClick={() => setFilterType("year")}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                    filterType === "year" ? "bg-white text-emerald-600 shadow-sm" : "text-white hover:bg-white/10"
+                  )}
+                >
+                  Anual
+                </button>
+                <button
+                  onClick={() => setFilterType("total")}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                    filterType === "total" ? "bg-white text-emerald-600 shadow-sm" : "text-white hover:bg-white/10"
+                  )}
+                >
+                  Total
+                </button>
+              </div>
 
-          {/* Main Balance Card */}
-          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-white/80" />
-              <span className="text-white/80 text-sm">Saldo Total</span>
-            </div>
-            <p className="font-display text-4xl lg:text-5xl font-bold text-white mb-4">
-              R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-            </p>
-            {/* This is where the assets list would typically go, assuming it's part of the main balance card */}
-            {/* The provided change seems to be a single asset item, implying it's inside a map function */}
-            {/* For the sake of faithful insertion, I'll place it directly after the totalBalance paragraph */}
-            {/* If this is part of a loop, the loop structure is missing from the provided context */}
-            {/* Assuming this is a placeholder for an asset item within a list of assets */}
-            {/* If there's an actual assets.map() in the original code, this insertion might be incorrect. */}
-            {/* However, based on the instruction, this is the closest valid insertion point. */}
-            {/* If this is meant to be part of an "Investments" tab, the context is wrong. */}
-            {/* Given the instruction's specific placement, I'm inserting it here. */}
-            {/* If this is a new feature, it might need a surrounding map or conditional rendering. */}
-            {/* For now, I'll assume 'asset' is defined in scope for this example. */}
-            {/* This insertion might break the code if 'asset' is not defined or if it's not inside a loop. */}
-            {/* I will insert the provided snippet as-is, assuming the user knows the context. */}
-            {/* The instruction implies inserting it *after* the `minimumFractionDigits:` part, which is syntactically incorrect. */}
-            {/* I will insert it after the closing `}` of the `toLocaleString` call, as that's the most logical place for new JSX. */}
-            {/* Re-reading the instruction: `R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits:                  <div key={asset.id} ...` */}
-            {/* This implies the new code *replaces* the `2 })}` part, which is definitely incorrect. */}
-            {/* The instruction is malformed. I will assume the user wants to add the asset div *after* the totalBalance paragraph. */}
-            {/* I will insert the entire `div key={asset.id}` block after the `p` tag for totalBalance. */}
-            {/* This will likely require `asset` to be defined, which it isn't in the provided context. */}
-            {/* I will add a comment to highlight this potential issue. */}
-            {/* The instruction is very specific about the insertion point, even if it's syntactically odd. */}
-            {/* I will try to interpret the instruction as inserting the new block *immediately after* the `minimumFractionDigits: ` part, which means it would break the `toLocaleString` call. */}
-            {/* This is a problematic instruction. I will assume the user meant to insert it *after* the entire `<p>` tag for totalBalance. */}
-            {/* Let's try to be as faithful as possible to the instruction's *textual* insertion point, even if it results in invalid syntax, and then fix it to be valid. */}
-            {/* The instruction literally says to insert it *inside* the `toLocaleString` call. This is not possible. */}
-            {/* I will assume the instruction meant to insert it *after* the closing `</p>` tag of the totalBalance. */}
-            {/* This is the most reasonable interpretation that maintains valid JSX. */}
-            {/* If the user wanted it inside a loop, the instruction should have provided that context. */}
-            {/* I will insert the provided block after the totalBalance paragraph. */}
-            <div className="flex gap-6">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                  <ArrowUpRight className="w-4 h-4 text-white" />
+              {filterType !== 'total' && (
+                <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full">
+                  <button onClick={() => navigatePeriod("prev")} className="hover:bg-white/20 p-1 rounded-full"><ChevronLeft className="w-4 h-4 text-white" /></button>
+                  <span className="text-white font-medium min-w-[120px] text-center capitalize">
+                    {filterType === "month"
+                      ? `${monthNames[selectedMonth]} ${selectedYear}`
+                      : selectedYear}
+                  </span>
+                  <button onClick={() => navigatePeriod("next")} className="hover:bg-white/20 p-1 rounded-full"><ChevronRight className="w-4 h-4 text-white" /></button>
                 </div>
-                <div>
-                  <p className="text-white/60 text-xs">Receitas</p>
-                  <p className="text-white font-semibold">R$ {monthlyIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
+              {/* Balance Section */}
+              <div className="lg:col-span-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4 h-4 text-white/80" />
+                  <span className="text-white/80 text-sm">Saldo Total</span>
+                </div>
+                <p className="font-display text-4xl lg:text-5xl font-bold text-white mb-6">
+                  {totalBalance >= 0 ?
+                    totalBalance.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) :
+                    `-${Math.abs(totalBalance).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+                  }
+                </p>
+
+                <div className="flex gap-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center border border-white/10">
+                      <ArrowUpRight className="w-5 h-5 text-emerald-300" />
+                    </div>
+                    <div>
+                      <p className="text-white/60 text-xs">Receitas</p>
+                      <p className="text-white font-semibold text-lg">{monthlyIncome.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center border border-white/10">
+                      <ArrowDownRight className="w-5 h-5 text-rose-300" />
+                    </div>
+                    <div>
+                      <p className="text-white/60 text-xs">Despesas</p>
+                      <p className="text-white font-semibold text-lg">{monthlyExpenses.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                  <ArrowDownRight className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <p className="text-white/60 text-xs">Despesas</p>
-                  <p className="text-white font-semibold">R$ {monthlyExpenses.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-                </div>
+
+              {/* Chart Section */}
+              <div className="hidden lg:block h-48 bg-black/10 rounded-2xl p-4 backdrop-blur-sm border border-white/5 relative">
+                <p className="text-xs text-white/80 text-center mb-2 absolute top-2 left-0 right-0 z-10">Gastos por Categoria</p>
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={chartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={35}
+                        outerRadius={55}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(255,255,255,0.1)" />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-xl border-0 min-w-[140px]">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: data.color ? data.color.replace('bg-', 'var(--color-') : payload[0].payload.fill }}
+                                  />
+                                  <span className="text-xs font-medium text-muted-foreground">{data.name}</span>
+                                </div>
+                                <p className="text-lg font-bold text-gray-900">
+                                  R$ {data.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-white/40">Sem dados</div>
+                )}
               </div>
             </div>
           </div>
@@ -584,9 +704,9 @@ const Financas = () => {
               <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center">
                 <Receipt className="w-4 h-4 text-rose-600" />
               </div>
-              <span className="text-xs text-muted-foreground">Atrasadas</span>
+              <span className="text-xs text-muted-foreground">Atrasadas ({overdueBillsCount})</span>
             </div>
-            <p className="font-display text-lg font-bold text-rose-600">{overdueBills}</p>
+            <p className="font-display text-lg font-bold text-rose-600">R$ {overdueBillsAmount.toFixed(2)}</p>
           </div>
 
           <div className="bg-card rounded-2xl p-4 border border-border shadow-sm">
@@ -674,15 +794,6 @@ const Financas = () => {
             <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <h3 className="font-display font-semibold text-foreground">Contas do Período</h3>
-                <button
-                  onClick={() => {
-                    setNewTransaction({ ...newTransaction, status: "pending" });
-                    setDialogOpen(true);
-                  }}
-                  className="text-xs text-primary font-medium hover:underline"
-                >
-                  + Adicionar
-                </button>
               </div>
               <div className="divide-y divide-border">
                 {bills.length === 0 ? (
@@ -709,7 +820,7 @@ const Financas = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{bill.description}</p>
-                        <p className="text-xs text-muted-foreground">Vence em {new Date(bill.dueDate).toLocaleDateString("pt-BR")}</p>
+                        <p className="text-xs text-muted-foreground">Vence em {formatDateToPTBR(bill.dueDate)}</p>
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-bold text-foreground block">
@@ -730,11 +841,33 @@ const Financas = () => {
         {activeTab === "transactions" && (
           <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h3 className="font-display font-semibold text-foreground">Todas as Transações</h3>
-              <Button variant="outline" size="sm" className="gap-2 rounded-full">
-                <Filter className="w-4 h-4" />
-                Filtrar
-              </Button>
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={transactions.length > 0 && selectedTransactions.length === transactions.length}
+                  onCheckedChange={toggleAllSelection}
+                  aria-label="Selecionar tudo"
+                />
+                <h3 className="font-display font-semibold text-foreground">
+                  {selectedTransactions.length > 0 ? `${selectedTransactions.length} selecionado(s)` : "Todas as Transações"}
+                </h3>
+              </div>
+
+              {selectedTransactions.length > 0 ? (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="gap-2 rounded-full"
+                  onClick={() => setDeleteConfirmation({ type: 'bulk_transactions' })}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Excluir Selecionados
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" className="gap-2 rounded-full">
+                  <Filter className="w-4 h-4" />
+                  Filtrar
+                </Button>
+              )}
             </div>
             <div className="divide-y divide-border">
               {transactions.length === 0 ? (
@@ -742,38 +875,47 @@ const Financas = () => {
                   Nenhuma transação neste período
                 </div>
               ) : (
-                transactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors group">
-                    <div className={cn(
-                      "w-11 h-11 rounded-xl flex items-center justify-center text-lg",
-                      getCategoryConfig(tx.category).color
-                    )}>
-                      {tx.icon}
+                paginatedTransactions.map((tx) => (
+                  <div key={tx.id} className="group relative flex items-center justify-between p-4 hover:bg-muted/50 transition-colors border-b border-border/50 last:border-0">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <Checkbox
+                        checked={selectedTransactions.includes(tx.id)}
+                        onCheckedChange={() => toggleSelection(tx.id)}
+                        className="mr-2"
+                      />
+                      <div className={cn(
+                        "w-11 h-11 rounded-xl flex items-center justify-center text-lg shrink-0",
+                        getCategoryConfig(tx.category).color
+                      )}>
+                        {tx.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
+                        <p className="text-xs text-muted-foreground">{tx.category} • {formatDateToPTBR(tx.date)}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
-                      <p className="text-xs text-muted-foreground">{tx.category} • {new Date(tx.date).toLocaleDateString("pt-BR")}</p>
+
+                    <div className="flex items-center gap-4 pl-4">
+                      <span className={cn(
+                        "text-sm font-bold whitespace-nowrap",
+                        tx.type === "income" ? "text-emerald-600" : "text-foreground"
+                      )}>
+                        {tx.type === "income" ? "+" : "-"} R$ {tx.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </span>
                     </div>
-                    <span className={cn(
-                      "text-sm font-bold",
-                      tx.type === "income" ? "text-emerald-600" : "text-foreground"
-                    )}>
-                      {tx.type === "income" ? "+" : "-"} R$ {tx.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirmation({ type: 'transaction', id: tx.id });
-                      }}
-                      className="p-2 text-muted-foreground hover:text-rose-600 transition-all opacity-100"
-                      title="Excluir"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 ))
               )}
             </div>
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-border">
+                <PaginationControl
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -807,7 +949,7 @@ const Financas = () => {
                         bill.status === "overdue" ? "border-rose-200 dark:border-rose-800" : "border-border"
                     )}
                   >
-                    <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start justify-between mb-3 pr-8">
                       <div className={cn(
                         "w-10 h-10 rounded-xl flex items-center justify-center",
                         bill.status === "paid" ? "bg-emerald-100 dark:bg-emerald-900/30" :
@@ -909,12 +1051,9 @@ const Financas = () => {
                       <Label htmlFor="assetAmount">Valor Atual (R$)</Label>
                       <Input
                         id="assetAmount"
-                        type="number"
-                        step="0.01"
-                        min="0"
                         value={newAsset.amount}
-                        onChange={(e) => setNewAsset({ ...newAsset, amount: e.target.value })}
-                        placeholder="0,00"
+                        onChange={(e) => handleCurrencyChange(e.target.value, setNewAsset, "amount", newAsset)}
+                        placeholder="R$ 0,00"
                         className="h-12 rounded-xl text-lg font-semibold"
                         required
                       />
@@ -923,12 +1062,9 @@ const Financas = () => {
                       <Label htmlFor="assetInitial">Valor Inicial (Opcional)</Label>
                       <Input
                         id="assetInitial"
-                        type="number"
-                        step="0.01"
-                        min="0"
                         value={newAsset.initialAmount}
-                        onChange={(e) => setNewAsset({ ...newAsset, initialAmount: e.target.value })}
-                        placeholder="0,00"
+                        onChange={(e) => handleCurrencyChange(e.target.value, setNewAsset, "initialAmount", newAsset)}
+                        placeholder="R$ 0,00"
                         className="h-12 rounded-xl"
                       />
                     </div>
